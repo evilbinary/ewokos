@@ -1,6 +1,6 @@
 target("fbd")
     set_type("application")
-    add_deps("libgraph", "libfbd","libarch_vpb")
+    add_deps("libbsp", "libgraph", "libfbd")
     add_files("**.c")        
     install_dir("drivers/versatilepb")
 target_end()
