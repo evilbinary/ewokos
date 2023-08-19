@@ -28,6 +28,7 @@ static int xwin_update_info(xwin_t* xwin, uint8_t type) {
 	}
 
 	proto_t in, out;
+	PF->init(&out);
 	PF->init(&in)->addi(&in, (uint32_t)xwin->xinfo)->addi(&in, type);
 	int ret = vfs_fcntl(xwin->fd, X_CNTL_UPDATE_INFO, &in, &out);
 	PF->clear(&in);
@@ -123,17 +124,19 @@ void xwin_close(xwin_t* xwin) {
 }
 
 void xwin_repaint(xwin_t* xwin) {
-	if(xwin->on_repaint == NULL)
+	if(xwin->on_repaint == NULL || xwin->xinfo->painting)
 		return;
 
 	graph_t g;
 	memset(&g, 0, sizeof(graph_t));
+
 	if(x_get_graph(xwin, &g) != NULL) {
 		xwin->on_repaint(xwin, &g);
 		vfs_fcntl(xwin->fd, X_CNTL_UPDATE, NULL, NULL);
 	}
 }
 
+/*
 void xwin_repaint_req(xwin_t* xwin) {
 	x_t* x = xwin->x;
 	xevent_t ev;
@@ -145,6 +148,7 @@ void xwin_repaint_req(xwin_t* xwin) {
 	x_push_event(x, &ev);
 	ipc_enable();
 }
+*/
 
 int xwin_set_display(xwin_t* xwin, uint32_t display_index) {
 	xwin->xinfo->display_index = display_index;
