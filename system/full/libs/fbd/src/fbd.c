@@ -43,7 +43,7 @@ static int fb_fcntl(int fd,
 static int fb_dma_init(fb_dma_t* dma) {
 	memset(dma, 0, sizeof(fb_dma_t));
 	uint32_t sz = _fbinfo->width*_fbinfo->height*4;
-	dma->shm = (void*)shm_alloc(sz, SHM_PUBLIC);
+	dma->shm = (void*)shm_alloc(sz + 1, SHM_PUBLIC); //one more byte (head) for busy flag 
 	if(dma->shm == NULL)
 		return -1;
 	//dma->size = _fbinfo->size_max;
@@ -74,9 +74,12 @@ static int fb_dev_cntl(int from_pid, int cmd, proto_t* in, proto_t* ret, void* p
 }
 
 static int32_t do_flush(fb_dma_t* dma) {
-	const void* buf = dma->shm;
+	uint8_t* buf = (uint8_t*)dma->shm;
 	uint32_t size = dma->size;
-	return (int32_t)_fbd->flush(_fbinfo, buf, size, _rotate);
+	buf[0] = 1; //busy
+	int32_t res = (int32_t)_fbd->flush(_fbinfo, buf+1, size, _rotate);
+	buf[0] = 0; //done
+	return res;
 }
 
 /*return
@@ -100,21 +103,10 @@ static void* fb_dma(int fd, int from_pid, fsinfo_t* info, int* size, void* p) {
 	return dma->shm;
 }
 
-int fbd_run(fbd_t* fbd, int argc, char** argv) {
+int fbd_run(fbd_t* fbd, const char* mnt_name, uint32_t w, uint32_t h, uint32_t rotate) {
 	_fbd = fbd;
 	_rotate = 0;
-	const char* mnt_name = argc > 1 ? argv[1]: "/dev/fb0";
-	int w = 640;
-	int h = 480;
-
-	if(argc > 3) {
-		w = atoi(argv[2]);
-		h = atoi(argv[3]);
-	}
-
-	if(argc > 4) {
-		_rotate = atoi(argv[4]);
-	}
+	_rotate = rotate;
 
 	fb_dma_t dma;
 	dma.shm = NULL;

@@ -14,7 +14,7 @@ static int tp_read(int fd, int from_pid, fsinfo_t* info,
 	(void)p;
 
 	if(size < 6)
-    return ERR_RETRY;
+		return ERR_RETRY_NON_BLOCK;
 
 	uint16_t* d = (uint16_t*)buf;
 
@@ -35,6 +35,7 @@ int main(int argc, char** argv) {
 		TP_IRQ = atoi(argv[3]);
 	}
 
+	bcm283x_spi_init();
 	xpt2046_init(TP_CS, TP_IRQ, 256);
 
 	vdevice_t dev;
