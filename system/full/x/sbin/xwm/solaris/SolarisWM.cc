@@ -22,15 +22,39 @@ void SolarisWM::drawDesktop(graph_t* g) {
 				g, (g->w - bgImg->w)/2, (g->h - bgImg->h)/2, bgImg->w, bgImg->h);
 }
 
+void SolarisWM::getBorderColor(uint32_t bg, uint32_t *dark, uint32_t *bright) {
+	uint32_t a, r, g, b, c;
+	a = (bg >> 24) & 0xff;
+	r = (bg >> 16) & 0xff;
+	g = (bg >> 8) & 0xff;
+	b = bg & 0xff;
+
+	c = r<g ? r:g;
+	c = c<b ? c:b;
+
+	*dark = argb(a, (c/3)*2, (c/3)*2, (c/3)*2);
+
+	r = r<0xAA ? r:0xAA;
+	g = g<0xAA ? g:0xAA;
+	b = b<0xAA ? b:0xAA;
+
+	c = r>g ? r:g;
+	c = c>b ? c:b;
+	*bright = argb(a, (c/3)*4, (c/3)*4, (c/3)*4);
+}
+
 void SolarisWM::drawMin(graph_t* g, xinfo_t* info, grect_t* r, bool top) {
 	(void)info;
 	uint32_t fg, bg;
 	getColor(&fg, &bg, top);
 
+	uint32_t dark, bright;
+	getBorderColor(bg, &dark, &bright);
+
 	graph_fill(g, r->x, r->y, r->w, r->h, bg);
-	graph_box_3d(g, r->x, r->y, r->w, r->h, 0xffffffff, 0xff444444);
+	graph_box_3d(g, r->x, r->y, r->w, r->h, bright, dark);
 	graph_box_3d(g, r->x+(r->w/2)-3, r->y+(r->h/2)-3,
-			6, 6, 0xffffffff, 0xff444444);
+			6, 6, bright, dark);
 }
 
 void SolarisWM::drawMax(graph_t* g, xinfo_t* info, grect_t* r, bool top) {
@@ -38,10 +62,13 @@ void SolarisWM::drawMax(graph_t* g, xinfo_t* info, grect_t* r, bool top) {
 	uint32_t fg, bg;
 	getColor(&fg, &bg, top);
 
+	uint32_t dark, bright;
+	getBorderColor(bg, &dark, &bright);
+
 	graph_fill(g, r->x, r->y, r->w, r->h, bg);
-	graph_box_3d(g, r->x, r->y, r->w, r->h, 0xffffffff, 0xff444444);
+	graph_box_3d(g, r->x, r->y, r->w, r->h, bright, dark);
 	graph_box_3d(g, r->x+3, r->y+3,
-			r->w-6, r->h-6, 0xffffffff, 0xff444444);
+			r->w-6, r->h-6, bright, dark);
 }
 
 void SolarisWM::drawClose(graph_t* g, xinfo_t* info, grect_t* r, bool top) {
@@ -49,24 +76,45 @@ void SolarisWM::drawClose(graph_t* g, xinfo_t* info, grect_t* r, bool top) {
 	uint32_t fg, bg;
 	getColor(&fg, &bg, top);
 
+	uint32_t dark, bright;
+	getBorderColor(bg, &dark, &bright);
+
 	graph_fill(g, r->x, r->y, r->w, r->h, bg);
-	graph_box_3d(g, r->x, r->y, r->w, r->h, 0xffffffff, 0xff444444);
+	graph_box_3d(g, r->x, r->y, r->w, r->h, bright, dark);
 	graph_box_3d(g, r->x+5, r->y+(r->h/2)-2,
-			r->w-10, 4, 0xffffffff, 0xff444444);
+			r->w-10, 4, bright, dark);
 }
 
 void SolarisWM::drawResize(graph_t* g, xinfo_t* info, grect_t* r, bool top) {
 	(void)info;
-
-	graph_line(g, r->x+r->w+1, r->y, r->x+r->w+frameW+1, r->y, 0xff444444);
-	graph_line(g, r->x+r->w+1, r->y+1, r->x+r->w+frameW+1, r->y+1, 0xffffffff);
-	graph_line(g, r->x, r->y+r->h+1, r->x, r->y+r->h+frameW+1, 0xff444444);
-	graph_line(g, r->x+1, r->y+r->h+1, r->x+1, r->y+r->h+frameW+1, 0xffffffff);
-}
-
-void SolarisWM::drawFrame(graph_t* g, xinfo_t* info, bool top) {
+	if(!top)
+		return;
 	uint32_t fg, bg;
 	getColor(&fg, &bg, top);
+
+	uint32_t dark, bright;
+	getBorderColor(bg, &dark, &bright);
+
+	graph_line(g, 
+			r->x + r->w - frameW, r->y,
+			r->x + r->w, r->y, dark);
+	graph_line(g,
+			r->x + r->w - frameW, r->y + 1,
+			r->x + r->w, r->y + 1, bright);
+	graph_line(g,
+			r->x, r->y + r->h - frameW,
+			r->x, r->y + r->h, dark);
+	graph_line(g,
+			r->x + 1, r->y + r->h - frameW,
+			r->x + 1, r->y + r->h, bright);
+}
+
+void SolarisWM::drawFrame(graph_t* graph, xinfo_t* info, bool top) {
+	uint32_t fg, bg;
+	getColor(&fg, &bg, top);
+
+	uint32_t dark, bright;
+	getBorderColor(bg, &dark, &bright);
 
 	int x = info->wsr.x;
 	int y = info->wsr.y;
@@ -77,21 +125,28 @@ void SolarisWM::drawFrame(graph_t* g, xinfo_t* info, bool top) {
 		h += titleH;
 		y -= titleH;
 	}
+
+
 	//win box
-	graph_box_3d(g, x-frameW-2, y-frameW-2, w+frameW*2+4, h+frameW*2+4, 0xffffffff, 0xff444444);
-	for(uint32_t i=0; i<frameW; i++) 
-		graph_box(g, x-2-i, y-2-i, w+4+i*2, h+4+i*2, bg);
-	graph_box_3d(g, x-1, y-1, w+2, h+2, 0xff444444, 0xffffffff);
-	//shadow
-	if(top) {
-		graph_fill(g, x+w+frameW+2, y, frameW, h+frameW+2, 0xaa000000);
-		graph_fill(g, x, y+h+frameW+2, w+frameW*2+2, frameW, 0xaa000000);
+	graph_box_3d(graph, x-frameW, y-frameW, w+frameW*2, h+frameW*2, bright, dark);
+	for(uint32_t i=1; i<(frameW-1); i++) {
+		graph_box(graph, x-(frameW-i), y-(frameW-i), w+(frameW-i)*2, h+(frameW-i)*2, bg);
 	}
+	graph_box_3d(graph, x-1, y-1, w+2, h+2, dark, bright);
+	//shadow
+	/*if(top) {
+		graph_fill(graph, x+w+frameW, y, frameW, h+frameW, 0xaa000000);
+		graph_fill(graph, x, y+h+frameW, w+frameW*2, frameW, 0xaa000000);
+	}
+	*/
 }
 
 void SolarisWM::drawTitle(graph_t* g, xinfo_t* info, grect_t* r, bool top) {
 	uint32_t fg, bg;
 	getColor(&fg, &bg, top);
+
+	uint32_t dark, bright;
+	getBorderColor(bg, &dark, &bright);
 
 	gsize_t sz;
 	font_text_size(info->title, &font, (uint32_t*)&sz.w, (uint32_t*)&sz.h);
@@ -99,7 +154,7 @@ void SolarisWM::drawTitle(graph_t* g, xinfo_t* info, grect_t* r, bool top) {
 	int pw = (r->w-sz.w)/2;
 	graph_fill(g, r->x, r->y, r->w, r->h, bg);
 	graph_draw_text_font(g, r->x+pw, r->y+2, info->title, &font, fg);//title
-	graph_box_3d(g, r->x, r->y, r->w, r->h, 0xffffffff, 0xff444444);
+	graph_box_3d(g, r->x, r->y, r->w, r->h, bright, dark);
 }
 
 void SolarisWM::readConfig(void) {
@@ -182,7 +237,7 @@ SolarisWM::SolarisWM(void) {
 	fgColor = 0xff888888;
 	bgTopColor = 0xffaaaaaa;
 	fgTopColor = 0xff222222;
-	frameW = 2;
+	frameW = 4;
 	bgImg = NULL;
 	titleH = 24;
 }

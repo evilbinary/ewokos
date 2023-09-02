@@ -84,8 +84,11 @@ static int32_t sys_get_thread_id(void) {
 static void sys_usleep(context_t* ctx, uint32_t count) {
 	proc_t * cproc = get_current_proc();
 	ipc_task_t* ipc = proc_ipc_get_task(cproc);
-	if(ipc == NULL) // no ipc task to handle
-		proc_usleep(ctx, count);
+
+	//no sleep when handling interrupter/ipc task.
+	if(cproc->space->interrupt.state != INTR_STATE_IDLE || ipc != NULL)
+		return;
+	proc_usleep(ctx, count);
 }
 
 static int32_t sys_malloc(int32_t size) {
@@ -283,10 +286,14 @@ static void sys_ipc_call(context_t* ctx, int32_t serv_pid, int32_t call_id, prot
 	}
 
 	if(serv_proc->space->interrupt.state != INTR_STATE_IDLE) {
-		ctx->gpr[0] = -1; // blocked if proc is on interrupt task, should retry
-		proc_block_on(serv_pid, (uint32_t)&serv_proc->space->interrupt);
-		schedule(ctx);
-		return;
+		if((call_id & IPC_NON_RETURN) == 0) {
+			ctx->gpr[0] = -1; // blocked if proc is on interrupt task, should retry
+			proc_block_on(serv_pid, (uint32_t)&serv_proc->space->interrupt);
+			schedule(ctx);
+			return;
+		}
+		call_id = call_id | IPC_LAZY; //not do task immediately
+		serv_proc->space->interrupt.state = READY;
 	}
 
 	ipc_task_t* ipc = proc_ipc_req(serv_proc, client_proc->info.pid, call_id, data);

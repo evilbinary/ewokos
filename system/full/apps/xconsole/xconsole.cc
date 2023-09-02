@@ -9,6 +9,7 @@
 #include <sys/keydef.h>
 #include <sys/klog.h>
 #include <ttf/ttf.h>
+#include <sys/basic_math.h>
 #include <x++/X.h>
 
 using namespace Ewok;
@@ -25,6 +26,7 @@ class XConsole : public XWin {
 	conf_t conf;
 	console_t console;
 	int32_t rollStepRows;
+	int32_t mouse_last_y;
 public:
 	XConsole() {
 		console_init(&console);
@@ -94,6 +96,7 @@ protected:
 	void onFocus(void) {
 		console.fg_color = conf.fg_color;
 		console.bg_color = conf.bg_color;
+		console.show_cursor = true;
 		repaint();
 		callXIM();
 	}
@@ -101,6 +104,7 @@ protected:
 	void onUnfocus(void) {
 		console.fg_color = conf.unfocus_fg_color;
 		console.bg_color = conf.unfocus_bg_color;
+		console.show_cursor = false;
 		repaint();
 	}
 
@@ -118,6 +122,22 @@ protected:
 			console_reset(&console, g->w, g->h, buffer_rows);
 		}
 		console_refresh(&console, g);
+	}
+	
+	void mouseHandle(xevent_t* ev) {
+		if(ev->state == XEVT_MOUSE_DOWN) {
+			mouse_last_y = ev->value.mouse.y;
+			return;
+		}
+		else if(ev->state == XEVT_MOUSE_DRAG) {
+			int mv = (mouse_last_y - ev->value.mouse.y) / console.font.max_size.y;
+			if(abs_32(mv) > 0) {
+				mouse_last_y = ev->value.mouse.y;
+				//drag release
+				console_roll(&console, mv);
+				repaint();
+			}
+		}
 	}
 
 	void onEvent(xevent_t* ev) {
@@ -137,6 +157,10 @@ protected:
 			if(c != 0) {
 				write(1, &c, 1);
 			}
+		}
+		else if(ev->type == XEVT_MOUSE) {
+			mouseHandle(ev);
+			return;	
 		}
 	}
 };

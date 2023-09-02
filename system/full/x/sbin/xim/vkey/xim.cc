@@ -146,24 +146,28 @@ protected:
 				return;
 		}
 		else { //RELEASE
-			if(c == KEY_BUTTON_X) {
+			if(c == KEY_BUTTON_SELECT) {
 				changeMode(!hideMode);
 				return;
 			}
 			else if(c == KEY_BUTTON_Y) {
+				doKeyIn('\b');
+				repaint();
+				return;
+			}
+			else if(c == KEY_BUTTON_START) {
 				doKeyIn('\n');
 				changeMode(true);
 				return;
 			}
+			else if(c == KEY_BUTTON_X) {
+				doKeyIn(KEY_ROLL_BACK);
+				repaint();
+				return;
+			}
 			else if(c == KEY_BUTTON_B) {
-				if(hideMode) {
-					doKeyIn('\4');
-				}
-				else {
-					doKeyIn('\b');
-					//changeMode(true);
-					repaint();
-				}
+				doKeyIn(KEY_ROLL_FORWARD);
+				repaint();
 				return;
 			}
 			else if(c == KEY_ENTER || c == KEY_BUTTON_A) {
@@ -311,7 +315,7 @@ protected:
 		else if(c == '\4') {
 			ev.value.im.value = KEY_ROLL_BACK;
 		}
-		else if(len < INPUT_MAX-1) {
+		else if(c < 0xF0 && len < INPUT_MAX-1) {
 			if(!hideMode) {
 				inputS[len] = c;
 				inputS[len+1] = 0;

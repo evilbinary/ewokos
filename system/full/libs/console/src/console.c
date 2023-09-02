@@ -14,18 +14,19 @@ extern "C" {
 #define T_W 2 /*tab width*/
 
 static uint16_t _fontw = 0;
-static uint32_t font_width(font_t* font) {
+static uint32_t font_width(console_t* console) {
 	if(_fontw != 0)
 		return _fontw;
 
-	font_char_size('w', font, &_fontw, NULL);
+	font_char_size('M', &console->font, &_fontw, NULL);
 	if(_fontw == 0)
-		_fontw = font->max_size.x;
+		_fontw = console->font.max_size.x;
+	_fontw += console->font_margin;
 	return _fontw;
 }
 
-static void cons_draw_char(console_t* console, graph_t* g, int32_t x, int32_t y, UNICODE16 c) {
-	graph_draw_char_font_fixed(g, x, y, c, &console->font, console->fg_color, console->font.max_size.x, 0);
+static void cons_draw_char(console_t* console, graph_t* g, int32_t x, int32_t y, UNICODE16 c, int32_t w) {
+	graph_draw_char_font_fixed(g, x, y, c, &console->font, console->fg_color, w, 0);
 }
 
 static uint32_t get_data_rows(console_t* console) {
@@ -44,17 +45,17 @@ int32_t console_reset(console_t* console, uint32_t w, uint32_t h, uint32_t total
 	int old_total = console->content.cols* console->content.rows;
 	int old_cols = console->content.cols;
 	int old_start_row = console->state.start_row;
-	char* old_data = NULL;
+	UNICODE16* old_data = NULL;
 	if(old_total > 0 && console->content.data != NULL) {
-		old_data = (char*)malloc(old_total);
-		memcpy(old_data, console->content.data, old_total);
+		old_data = (char*)malloc(old_total*2);
+		memcpy(old_data, console->content.data, old_total*2);
 	}
 
 	console->state.size = 0;
 	console->state.start_row = 0;
 	console->state.back_offset_rows = 0;
 	console->state.current_row = 0;
-	int32_t font_w = (console->font.max_size.x + console->font_margin*2);
+	int32_t font_w = font_width(console);
 	if(font_w <= 0)
 		font_w = 1;
 	console->content.cols = w / font_w - 1;
@@ -89,8 +90,9 @@ int32_t console_reset(console_t* console, uint32_t w, uint32_t h, uint32_t total
 		if(at >= old_total)
 			at -= old_total;
 		UNICODE16 c = old_data[at];
-		if(c != 0)
+		if(c != 0) {
 			console_put_char(console, c);
+		}
 	}
 	free(old_data);
 	return 0;
@@ -151,7 +153,7 @@ void console_refresh_content(console_t* console, graph_t* g) {
 	uint32_t i = start_row * console->content.cols;
 	uint32_t x = 0;
 	uint32_t y = 0;
-	int32_t w = console->font.max_size.x + console->font_margin*2;
+	int32_t w = font_width(console);
 	if(w <= 0)
 		w = 1;
 	uint32_t h = console->font.max_size.y;
@@ -159,7 +161,7 @@ void console_refresh_content(console_t* console, graph_t* g) {
 		uint32_t at = get_at(console, i);
 		UNICODE16 c = console->content.data[at];
 		if(c != 0 && c != '\n') {
-			cons_draw_char(console, g, x*w, y*h, console->content.data[at]);
+			cons_draw_char(console, g, x*w, y*h, console->content.data[at], w);
 		}
 		x++;
 		if(x >= console->content.cols) {
@@ -168,6 +170,9 @@ void console_refresh_content(console_t* console, graph_t* g) {
 		}
 		i++;
 	}	
+	//draw cursor
+	if(console->show_cursor)
+		graph_fill(g, x*w, y*h, w, h, console->fg_color);
 }
 
 void console_refresh(console_t* console, graph_t* g) {

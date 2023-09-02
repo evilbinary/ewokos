@@ -564,6 +564,14 @@ int vfs_fcntl(int fd, int cmd, proto_t* arg_in, proto_t* arg_out) {
 	return res;
 }
 
+inline int  vfs_fcntl_wait(int fd, int cmd, proto_t* in) {
+	proto_t out;
+	PF->init(&out);
+	int res = vfs_fcntl(fd, cmd, in, &out);
+	PF->clear(&out);
+	return res;
+}
+
 void* vfs_dma(int fd, int* size) {
 	fsinfo_t info;
 	if(vfs_get_by_fd(fd, &info) != 0)
@@ -598,7 +606,7 @@ int vfs_flush(int fd, bool wait) {
 		add(&in, &info, sizeof(fsinfo_t));
 	int res = -1;
 	if(wait)
-		ipc_call_wait(info.mount_pid, FS_CMD_FLUSH, &in, NULL);
+		ipc_call_wait(info.mount_pid, FS_CMD_FLUSH, &in);
 	else
 		ipc_call(info.mount_pid, FS_CMD_FLUSH, &in, NULL);
 	PF->clear(&in);

@@ -201,6 +201,14 @@ void graph_draw_char_font(graph_t* g, int32_t x, int32_t y, TTY_U32 c,
 	if(font_get_glyph(font, c, &glyph) != 0)
 		return;
 	
+	if(c == '\t') {
+		if(w != NULL)
+			*w = glyph.size.x*2;
+		if(h != NULL)
+			*h = glyph.size.y;
+		return;
+	}
+
 	if(glyph.cache != NULL) {
 		for (TTY_S32 j = 0; j < font->max_size.y; j++) {
 			for (TTY_S32 i = 0; i < font->max_size.x; i++) {
@@ -234,13 +242,13 @@ void graph_draw_char_font_fixed(graph_t* g, int32_t x, int32_t y, TTY_U32 c,
 		return;
 
 	if(w > 0)
-		x += (((TTY_S32)w) - glyph.size.x)/2 - glyph.offset.x;
+		x = x + (((TTY_S32)w) - glyph.size.x)/2 - glyph.offset.x;
 	if(h > 0)
-		y += (((TTY_S32)h) - glyph.size.y)/2 - glyph.offset.y;
+		y = y + (((TTY_S32)h) - glyph.size.y)/2 - glyph.offset.y;
 	
 	if(glyph.cache != NULL) {
 		for (TTY_S32 j = 0; j < font->max_size.y; j++) {
-			for (TTY_S32 i = 0; i < font->max_size.x; i++) {
+			for (TTY_S32 i = 0; i < glyph.size.x; i++) {
 				TTY_U8 pv = glyph.cache[j*font->max_size.x+i];
 				graph_pixel_argb_safe(g, x+i, y+j,
 						(color >> 24) & pv & 0xff,
@@ -264,7 +272,7 @@ void graph_draw_text_font(graph_t* g, int32_t x, int32_t y, const char* str,
 		TTY_U16 w = 0;
 		graph_draw_char_font(g, x, y, out[i], font, color, &w, NULL);
 		int dx = w;
-		if(dx <= 0)
+		if(dx < 0)
 			dx = w/2;
 		x += dx;
 	}
