@@ -270,8 +270,8 @@ public:
 		selectColor = 0xff444444;
 		titleColor = 0xffffff00;
 		titleBGColor = 0xffaaaaaa;
-		fileIcon = png_image_new("/data/icons/system/32/file.png");
-		dirIcon = png_image_new("/data/icons/system/32/dir.png");
+		fileIcon = png_image_new(x_get_theme_fname("/data/x/themes", "finder", "icons/file.png"));
+		dirIcon = png_image_new(x_get_theme_fname("/data/x/themes", "finder", "icons/folder.png"));
 		font_load("/data/fonts/system.ttf", 14, &font);
 		itemSize = 36;
 
@@ -357,7 +357,7 @@ int main(int argc, char* argv[]) {
 	(void)argv;
 
 	Finder xwin;
-	xwin.readConfig(x_get_theme_fname("finder.conf"));
+	xwin.readConfig(x_get_theme_fname("/etc/x/themes", "", "finder.conf"));
 
 	X x;
 	xscreen_t scr;
