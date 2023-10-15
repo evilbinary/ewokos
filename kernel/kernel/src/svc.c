@@ -33,7 +33,6 @@ static void sys_exit(context_t* ctx, int32_t res) {
 	ctx->gpr[0] = 0;
 	proc_t* cproc = get_current_proc();
 	proc_exit(ctx, cproc, res);
-	schedule(ctx);
 }
 
 static int32_t sys_signal_setup(uint32_t entry) {
@@ -273,10 +272,16 @@ static void sys_ipc_call(context_t* ctx, int32_t serv_pid, int32_t call_id, prot
 	proc_t* client_proc = get_current_proc();
 	proc_t* serv_proc = proc_get(serv_pid);
 
-	if(serv_proc == NULL ||
-			client_proc->info.pid == serv_pid || //can't do self ipc
-			serv_proc->space->ipc_server.entry == 0) //no ipc service setup
+	if(client_proc->info.pid == serv_pid) { //can't do self ipc
+		//printf("ipc can't call self service (client: %d, server: %d, call: 0x%x\n", client_proc->info.pid, serv_pid, call_id);
 		return;
+	}
+
+	if(serv_proc == NULL ||
+			serv_proc->space->ipc_server.entry == 0) {//no ipc service setup
+		printf("ipc not ready (client: %d, server: %d, call: 0x%x\n", client_proc->info.pid, serv_pid, call_id);
+		return;
+	}
 
 	if(serv_proc->space->ipc_server.disabled) {
 		ctx->gpr[0] = -1; // blocked if server disabled, should retry
@@ -296,7 +301,7 @@ static void sys_ipc_call(context_t* ctx, int32_t serv_pid, int32_t call_id, prot
 		serv_proc->space->interrupt.state = READY;
 	}
 
-	ipc_task_t* ipc = proc_ipc_req(serv_proc, client_proc->info.pid, call_id, data);
+	ipc_task_t* ipc = proc_ipc_req(serv_proc, client_proc, call_id, data);
 	if(ipc == NULL)
 		return;
 
@@ -364,7 +369,7 @@ static int32_t sys_ipc_get_info(uint32_t uid, int32_t* ipc_info, proto_t* ipc_ar
 		return -1;
 	}
 
-	ipc_info[0] = ipc->client_pid;
+	ipc_info[0] = get_proc_pid(ipc->client_pid);
 	ipc_info[1] = ipc->call_id;
 
 	if(ipc->data.size > 0) { //get request input args
@@ -461,28 +466,9 @@ static void sys_proc_ready_ping(void) {
 	cproc->space->ready_ping = true;
 }
 
-static kevent_t* sys_get_kevent_raw(void) {
-	proc_t* cproc = get_current_proc();
-	if(cproc->info.pid != _core_proc_pid)	 //only core proc access allowed.
-		return NULL;
-
-	kevent_t* kev = kev_pop();
-	if(kev == NULL) {
-		return NULL;
-	}
-
-	kevent_t* ret = (kevent_t*)proc_malloc(cproc, sizeof(kevent_t));
-	ret->type = kev->type;
-	ret->data[0] = kev->data[0];
-	ret->data[1] = kev->data[1];
-	ret->data[2] = kev->data[2];
-	kfree(kev);
-	return ret;
-}
-
 static void sys_get_kevent(context_t* ctx) {
 	ctx->gpr[0] = 0;	
-	kevent_t* kev = sys_get_kevent_raw();
+	kevent_t* kev = kev_pop();
 	if(kev == NULL) {
 		proc_block_on(-1, (uint32_t)kev_init);
 		schedule(ctx);	
@@ -564,6 +550,16 @@ static inline int32_t sys_proc_uuid(int32_t pid) {
 	if(proc == NULL)
 		return 0;
 	return proc->info.uuid;
+}
+
+static inline void sys_schd_core_lock(void) {
+	proc_t* cproc = get_current_proc();
+	cproc->schd_core_lock_counter = SCHD_CORE_LOCK_LIMIT;
+}
+
+static inline void sys_schd_core_unlock(context_t* ctx) {
+	proc_t* cproc = get_current_proc();
+	cproc->schd_core_lock_counter = 0;
 }
 
 static inline void sys_root(void) {
@@ -733,6 +729,12 @@ static inline void _svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_
 	case SYS_P2V:
 		ctx->gpr[0] = P2V(arg0);
 		return;
+	case SYS_SCHD_CORE_LOCK:	
+		sys_schd_core_lock();
+		return;	
+	case SYS_SCHD_CORE_UNLOCK:	
+		sys_schd_core_unlock(ctx);
+		return;	
 	case SYS_CLOSE_KCONSOLE:	
 		sys_root();
 		return;	

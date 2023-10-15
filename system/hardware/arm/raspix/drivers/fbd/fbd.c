@@ -4,6 +4,7 @@
 #include <string.h>
 #include <fbd/fbd.h>
 #include <graph/graph.h>
+#include <upng/upng.h>
 #include <arch/bcm283x/framebuffer.h>
 
 static graph_t* _g = NULL;
@@ -17,17 +18,16 @@ static uint32_t flush(const fbinfo_t* fbinfo, const void* buf, uint32_t size, in
 	if(rotate == G_ROTATE_N90 || rotate == G_ROTATE_90) {
 		graph_init(&g, buf, fbinfo->height, fbinfo->width);
 		if(_g == NULL)
-			_g = graph_new(NULL, fbinfo->width, fbinfo->height);
+			_g = graph_new((uint32_t*)fbinfo->pointer, fbinfo->width, fbinfo->height);
 	}
 	else if(rotate == G_ROTATE_180) {
 		graph_init(&g, buf, fbinfo->width, fbinfo->height);
 		if(_g == NULL)
-			_g = graph_new(NULL, fbinfo->width, fbinfo->height);
+			_g = graph_new((uint32_t*)fbinfo->pointer, fbinfo->width, fbinfo->height);
 	}
 
 	if(_g != NULL) {
 		graph_rotate_to(&g, _g, rotate);
-		memcpy((void*)fbinfo->pointer, _g->buffer, sz);
 	}
 	else  {
 		memcpy((void*)fbinfo->pointer, buf, sz);
@@ -57,6 +57,7 @@ int main(int argc, char** argv) {
 		h = atoi(argv[3]);
 	}
 
+	fbd.splash = NULL;
 	fbd.flush = flush;
 	fbd.init = init;
 	fbd.get_info = get_info;

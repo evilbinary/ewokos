@@ -2,6 +2,8 @@ ROOT_DIR = ../../..
 BUILD_DIR = $(ROOT_DIR)/build
 TARGET_DIR = $(BUILD_DIR)/rootfs
 
+export ARCH=arm
+export NEON=yes
 
 all: basic_sys
 	@echo "all done."
@@ -13,6 +15,7 @@ extra: basic_sys extra_sys
 
 basic_sys: kernel_heads 
 	mkdir -p $(TARGET_DIR)/drivers/miyoo
+	rm -f $(BUILD_DIR)/lib/libbsp.a
 	cd libs;make
 	cd $(ROOT_DIR)/basic;make
 	cd $(ROOT_DIR)/full;make

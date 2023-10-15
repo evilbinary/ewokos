@@ -11,6 +11,7 @@
 #include <ttf/ttf.h>
 #include <sys/basic_math.h>
 #include <x++/X.h>
+#include <pthread.h>
 
 using namespace Ewok;
 
@@ -19,7 +20,6 @@ typedef struct {
 	uint32_t bg_color;
 	uint32_t unfocus_fg_color;
 	uint32_t unfocus_bg_color;
-	uint32_t buffer_rows;
 } conf_t;
 
 class XConsole : public XWin {
@@ -58,29 +58,32 @@ public:
 		if(v[0] != 0) 
 			conf.unfocus_bg_color = atoi_base(v, 16);
 
-		v = sconf_get(sconf, "buffer_rows");
-		if(v[0] != 0) 
-			conf.buffer_rows = atoi(v);
-
 		uint32_t font_size = 16;
 		v = sconf_get(sconf, "font_size");
 		if(v[0] != 0) 
 			font_size = atoi(v);
+		console.textview.font_size = font_size;
+		
+		v = sconf_get(sconf, "font_fixed");
+		if(v[0] != 0) 
+			console.textview.font_fixed = atoi(v);
+
+		v = sconf_get(sconf, "font_shadow");
+		if(v[0] != 0) {
+			console.textview.shadow = true;
+			console.textview.shadow_color = atoi_base(v, 16);
+		}
 
 		v = sconf_get(sconf, "font");
 		if(v[0] == 0) 
 			v = "/data/fonts/system.ttf";
 		
-		font_load(v, font_size, &console.font);
-
-		v = sconf_get(sconf, "font_margin");
-		if(v[0] != 0) 
-			console.font_margin = atoi(v);
+		font_load(v, font_size, &console.textview.font);
 
 		sconf_free(sconf);
 
-		console.fg_color = conf.fg_color;
-		console.bg_color = conf.bg_color;
+		console.textview.fg_color = conf.fg_color;
+		console.textview.bg_color = conf.bg_color;
 		return true;
 	}
 
@@ -94,34 +97,30 @@ public:
 
 protected:
 	void onFocus(void) {
-		console.fg_color = conf.fg_color;
-		console.bg_color = conf.bg_color;
+		console.textview.fg_color = conf.fg_color;
+		console.textview.bg_color = conf.bg_color;
 		console.show_cursor = true;
 		repaint();
 		callXIM();
 	}
 
 	void onUnfocus(void) {
-		console.fg_color = conf.unfocus_fg_color;
-		console.bg_color = conf.unfocus_bg_color;
+		console.textview.fg_color = conf.unfocus_fg_color;
+		console.textview.bg_color = conf.unfocus_bg_color;
 		console.show_cursor = false;
 		repaint();
 	}
 
 	void onRepaint(graph_t* g) {
-		if(console.w != g->w || console.h != g->h) {
-			uint32_t buffer_rows = 0;
-			if(console.font.id >=0) {
-				buffer_rows = (g->h / console.font.max_size.y)*4;
-				rollStepRows = (g->h / console.font.max_size.y) / 2;
-			}
-			if(conf.buffer_rows > buffer_rows) {
-				buffer_rows = conf.buffer_rows;
-				rollStepRows = 8;
-			}
-			console_reset(&console, g->w, g->h, buffer_rows);
+		if(console.textview.w != g->w || console.textview.h != g->h) {
+			rollStepRows = (g->h / console.textview.font.max_size.y) / 2;
+			console_reset(&console, g->w, g->h);
 		}
 		console_refresh(&console, g);
+		if(color_a(console.textview.bg_color) != 0xff)
+			setAlpha(true);
+		else
+			setAlpha(false);
 	}
 	
 	void mouseHandle(xevent_t* ev) {
@@ -130,7 +129,7 @@ protected:
 			return;
 		}
 		else if(ev->state == XEVT_MOUSE_DRAG) {
-			int mv = (mouse_last_y - ev->value.mouse.y) / console.font.max_size.y;
+			int mv = (mouse_last_y - ev->value.mouse.y) / console.textview.font.max_size.y;
 			if(abs_32(mv) > 0) {
 				mouse_last_y = ev->value.mouse.y;
 				//drag release
@@ -165,34 +164,36 @@ protected:
 	}
 };
 
-static void loop(void* p) {
+static bool _termniated = false;
+static bool _thread_done = false;
+static void* thread_loop(void* p) {
 	XConsole* console = (XConsole*)p;
 
-	char buf[512];
-	int size = read(0, buf, 512);
-	if(size > 0) {
-		console->put(buf, size);
-		console->rollEnd();
-		console->repaint();
-		return;
+	while(!_termniated) {
+		char buf[512];
+		int size = read(0, buf, 512);
+		if(_termniated)
+			break;
+		if(size > 0) {
+			console->put(buf, size);
+			console->rollEnd();
+			console->repaint();
+		}
+		else if(errno != EAGAIN) {
+			console->close();
+			break;
+		}
 	}
-	if(errno != EAGAIN) 
-		console->close();
-	else
-		usleep(3000);
+	_thread_done = true;
+	return NULL;
 }
 
 static int run(int argc, char* argv[]) {
 	(void)argc;
 	(void)argv;
 
-	int flags = fcntl(0, F_GETFL, 0);
-	fcntl(0, F_SETFL, flags | O_NONBLOCK);
-	flags = fcntl(1, F_GETFL, 0);
-	fcntl(1, F_SETFL, flags | O_NONBLOCK);
-
 	XConsole xwin;
-	xwin.readConfig("/etc/x/xconsole.conf");
+	xwin.readConfig(x_get_theme_fname("xconsole.conf"));
 
 	X x;
 	xscreen_t scr;
@@ -200,7 +201,16 @@ static int run(int argc, char* argv[]) {
 	x.open(&xwin, 64, 40, scr.size.w*3/4, scr.size.h*3/4, "xconsole", 0);
 	xwin.setVisible(true);
 
-	x.run(loop, &xwin);
+	pthread_t tid;
+	_termniated = false;
+	_thread_done = false;
+	pthread_create(&tid, NULL, thread_loop, &xwin);
+
+	x.run(NULL, &xwin);
+	_termniated = true;
+	close(0);
+	while(!_thread_done)
+		usleep(2000);
 	return 0;
 }
 

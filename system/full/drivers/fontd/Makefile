@@ -1,4 +1,4 @@
-include ../../../make.rule
+include ../../../hardware/$(ARCH)/make.rule
 
 BUILD_DIR = ../../../build
 TARGET_DIR = $(BUILD_DIR)/rootfs
@@ -17,7 +17,7 @@ $(FONTD): $(FONTD_OBJS) \
 		$(BUILD_DIR)/lib/libgraph.a \
 		$(BUILD_DIR)/lib/libhash.a \
 		$(BUILD_DIR)/lib/libttf.a 
-	$(LD) -Ttext=100 $(FONTD_OBJS) -o $(FONTD) $(LDFLAGS)  -lttf -lhash -lgraph -lsconf -lewokc -lsoftfloat -lc
+	$(LD) -Ttext=100 $(FONTD_OBJS) -o $(FONTD) $(LDFLAGS)  -lttf -lhash -lgraph -lsconf -lewokc -lc
 
 clean:
 	rm -f $(FONTD_OBJS)

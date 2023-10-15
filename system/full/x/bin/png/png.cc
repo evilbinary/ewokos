@@ -18,12 +18,12 @@ class Png : public XWin {
 		uint32_t c2;
 		for(int i=0; ;i++) {
 			if((i%2) == 0) {
-				c1 = 0xff888888;
-				c2 = 0xff444444;
+				c1 = 0x44888888;
+				c2 = 0x44444444;
 			}
 			else {
-				c2 = 0xff888888;
-				c1 = 0xff444444;
+				c2 = 0x44888888;
+				c1 = 0x44444444;
 			}
 
 			for(int j=0; ;j++) {
@@ -83,8 +83,11 @@ int main(int argc, char* argv[]) {
 	X x;
 
 	Png xwin;
-	x.open(&xwin, 30, 30, img->w, img->h+60, "png", X_STYLE_NORMAL | X_STYLE_NO_RESIZE | X_STYLE_ALPHA);
+	x.open(&xwin, 30, 30, img->w, img->h+60,
+			"png", X_STYLE_NORMAL | X_STYLE_NO_RESIZE);
+			//"png", X_STYLE_NO_FRAME | X_STYLE_NO_FOCUS);
 	xwin.setImage(img);
+	xwin.setAlpha(true);
 	xwin.setVisible(true);
 
 	x.run(NULL);

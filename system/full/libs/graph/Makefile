@@ -1,4 +1,4 @@
-include ../../../make.rule
+include ../../../hardware/$(ARCH)/make.rule
 
 BUILD_DIR = ../../../build
 TARGET_DIR = $(BUILD_DIR)
@@ -15,6 +15,10 @@ LIB_GRAPH_OBJS = src/graph.o \
 	src/circle.o \
 	src/round.o \
 	src/bitmap.o
+
+ifeq ($(NEON),yes)
+LIB_GRAPH_OBJS += src/blt_neon.o
+endif
 
 GRAPH = $(TARGET_DIR)/lib/libgraph.a
 

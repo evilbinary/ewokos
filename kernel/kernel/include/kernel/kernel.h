@@ -3,8 +3,9 @@
 
 #include <mm/mmu.h>
 
-#define MIN_SCHD_FREQ      256
-#define KERNEL_SCHD_FREQ   4096
+#define KERNEL_PROC_RUN_RECOUNT_SEC   3
+#define MIN_SCHD_FREQ      1024
+#define KERNEL_TIMER0_FREQ   (1024*16)
 
 extern uint32_t _kernel_sec;
 extern uint64_t _kernel_usec;

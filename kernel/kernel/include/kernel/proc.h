@@ -67,9 +67,10 @@ typedef struct {
 	page_dir_entry_t* vm;
 	malloc_t          malloc_man;
 	uint32_t          heap_size;
+	int32_t           refs;
 	bool              ready_ping;
 	
-	uint32_t           shms[SHM_MAX];
+	uint32_t          shms[SHM_MAX];
 
 	ipc_server_t      ipc_server;
 	signal_t          signal;
@@ -77,12 +78,13 @@ typedef struct {
 } proc_space_t;
 
 #define STACK_PAGES 32
-#define THREAD_STACK_PAGES 16 
+#define THREAD_STACK_PAGES 16
 
 typedef struct st_proc {
 	procinfo_t        info;
 	uint32_t          block_event;
 	int64_t           sleep_counter; //sleep usec
+	uint32_t          schd_core_lock_counter; //schd_core_lock usec
 	uint32_t          run_usec_counter; //run time usec
 	proc_space_t*     space;
 
@@ -113,7 +115,7 @@ extern void    proc_map_page(page_dir_entry_t *vm, uint32_t vaddr, uint32_t padd
 extern void    proc_unmap_page(page_dir_entry_t *vm, uint32_t vaddr);
 
 extern void    proc_funeral(proc_t* proc);
-extern int32_t proc_zombie_funeral(void);
+extern void    proc_zombie_funeral(void);
 extern void    proc_exit(context_t* ctx, proc_t *proc, int32_t res);
 extern proc_t *proc_create(int32_t type, proc_t* parent);
 
@@ -127,13 +129,14 @@ extern void    proc_waitpid(context_t* ctx, int32_t pid);
 extern proc_t* proc_get(int32_t pid);
 extern proc_t* proc_get_by_uuid(uint32_t uuid);
 extern proc_t* proc_get_proc(proc_t* proc);
+extern int32_t get_proc_pid(int32_t pid);
 extern proc_t* kfork_raw(context_t* ctx, int32_t type, proc_t* parent);
 extern proc_t* kfork(context_t* ctx, int32_t type);
 extern proc_t* kfork_core_halt(uint32_t core);
 
 extern procinfo_t* get_procs(int32_t* num);
 
-extern int32_t renew_kernel_tic(uint64_t usec);
+extern int32_t renew_kernel_tic(uint32_t usec);
 extern void    renew_kernel_sec(void);
 extern void    proc_usleep(context_t* ctx, uint32_t usec);
 extern void    proc_ready(proc_t* proc);

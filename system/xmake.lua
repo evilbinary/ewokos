@@ -40,8 +40,8 @@ function set_toolchain(arch)
         add_cflags("-mcmodel=medany -fno-optimize-sibling-calls -mstrict-align  -fpie -fno-stack-protector")
     else
         set_toolchains("arm-none-eabi")
-        add_cflags(  "-marm -msoft-float -mapcs-frame -std=c99")
-        add_cxxflags("-marm -msoft-float -mapcs-frame -std=c++11")
+        add_cflags(  "-marm -mfloat-abi=softfp  -mapcs-frame -std=c99")
+        add_cxxflags("-marm -mfloat-abi=softfp  -mapcs-frame -std=c++11")
     end
 
     add_cflags(
@@ -113,9 +113,9 @@ function rootfs_common(image)
     end)
 
     -- baseic system
-    add_deps("xserverd","consoled","fontd","displayd","anim","gtest","xconsole",
+    add_deps("xserverd","consoled","xconsoled","fontd","displayd","anim","gtest","xconsole",
             "finder","book","wtest","launcher","png","ttyjoy","xim_vkey","xim_none",
-            "xmoused","xwm_macos7","xjoystickd","xtouchd","fbd","etc","fbd","stated",
+            "xmoused","xwm_mac1984","xjoystickd","xtouchd","fbd","etc","fbd","stated",
             "sysinfod","timerd","nulld","ramfsd","cat","svcinfo","dump","echo","pwd",
             "sleep","shell","uname","grep","kill","ps","mkdir","mount","rundev","ls",
             "rm","rx","login","session","init","sdfsd","core","vfsd", "emu"
@@ -145,7 +145,9 @@ target("system")
 
         if not os.exists(rootfs_dir) then
             os.mkdir(rootfs_dir)
-            os.run("cp -rf %s/data %s", system_dir, rootfs_dir)
+            os.run("cp -rf %s/full/data %s", system_dir, rootfs_dir)
+            os.run("cp -rf %s/basic/etc %s", system_dir, rootfs_dir)
+            os.run("cp -rf %s/full/etc %s", system_dir, rootfs_dir)
             os.run("mkdir -p %s/dev", rootfs_dir)
             os.run("mkdir -p %s/home/root", rootfs_dir)
         end

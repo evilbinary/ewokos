@@ -43,6 +43,7 @@ static mount_t _vfs_mounts[FS_MOUNT_MAX];
 typedef struct {
 	file_t fds[PROC_FILE_MAX];
 	uint32_t state;
+	uint32_t uuid;
 } proc_fds_t;
 
 static proc_fds_t _proc_fds_table[PROC_MAX];
@@ -66,8 +67,7 @@ static void vfs_init(void) {
 	}
 
 	for(i = 0; i<PROC_MAX; i++) {
-		for(int j = 0; j<PROC_FILE_MAX; j++)
-			memset(&_proc_fds_table[i].fds[j], 0, sizeof(file_t));
+		memset(&_proc_fds_table[i], 0, sizeof(proc_fds_t));
 	}
 
 	_vfs_root = vfs_new_node();
@@ -585,7 +585,7 @@ static void do_vfs_get_by_fd(int pid, proto_t* in, proto_t* out) {
 		PF->addi(out, 0);
     return;
 	}
-	PF->add(out, gen_fsinfo(node), sizeof(fsinfo_t));
+	PF->addi(out, (int32_t)node)->add(out, gen_fsinfo(node), sizeof(fsinfo_t));
 }
 
 static void do_vfs_get_flags(int pid, proto_t* in, proto_t* out) {
@@ -611,6 +611,7 @@ static void do_vfs_set_flags(int pid, proto_t* in, proto_t* out) {
 }
 
 static void do_vfs_new_node(proto_t* in, proto_t* out) {
+	PF->addi(out, -1);
 	fsinfo_t info;
 	if(proto_read_to(in, &info, sizeof(fsinfo_t)) != sizeof(fsinfo_t))
 		return;
@@ -620,7 +621,7 @@ static void do_vfs_new_node(proto_t* in, proto_t* out) {
 	info.node = (uint32_t)node;
 	info.mount_pid = -1;
 	memcpy(&node->fsinfo, &info, sizeof(fsinfo_t));
-	PF->add(out, &info, sizeof(fsinfo_t));
+	PF->clear(out)->addi(out, 0)->add(out, &info, sizeof(fsinfo_t));
 }
 
 static void do_vfs_open(int32_t pid, proto_t* in, proto_t* out) {
@@ -854,12 +855,10 @@ static void do_vfs_pipe_read(int pid, proto_t* in, proto_t* out) {
 	if(size < 0 || node == NULL) {
 		return;
 	}
-	proc_wakeup((int32_t)node); //wakeup writer.
 
 	buffer_t* buffer = (buffer_t*)info.data;
 	if(buffer == NULL) { //buffer not ready 
 		PF->clear(out)->addi(out, 0); // retry
-		//proc_wakeup((int32_t)node); //wakeup writer.
 		return;
 	}
 
@@ -868,16 +867,31 @@ static void do_vfs_pipe_read(int pid, proto_t* in, proto_t* out) {
 	if(size > 0) {
 		PF->clear(out)->addi(out, size)->add(out, data, size);
 		free(data);
-		//proc_wakeup((int32_t)node); //wakeup writer.
+		proc_wakeup((int32_t)node); //wakeup writer.
 		return;
 	}
 	free(data);
 
 	if(node == NULL || node->refs < 2) { // close by other peer
-		//proc_wakeup((int32_t)node); //wakeup writer.
-    	return;
+		proc_wakeup((int32_t)node); //wakeup writer.
+   	return;
 	}
 	PF->clear(out)->addi(out, 0); //retry
+}
+
+static void vfs_proc_exit(int32_t cpid) {
+	if(cpid < 0)
+		return;
+	int32_t i;
+	for(i=0; i<PROC_FILE_MAX; i++) {
+		file_t *f = &_proc_fds_table[cpid].fds[i];
+		if(f->node != NULL) {
+			proc_file_close(cpid, i, f, true);
+		}
+		memset(f, 0, sizeof(file_t));
+	}
+	_proc_fds_table[cpid].state = UNUSED;
+	_proc_fds_table[cpid].uuid = 0;
 }
 
 static void do_vfs_proc_clone(int32_t pid, proto_t* in) {
@@ -886,7 +900,11 @@ static void do_vfs_proc_clone(int32_t pid, proto_t* in) {
 	int cpid = proto_read_int(in);
 	if(fpid < 0 || cpid < 0)
 		return;
+
+	if(_proc_fds_table[cpid].state == RUNNING)
+		vfs_proc_exit(cpid);
 	_proc_fds_table[cpid].state = RUNNING;
+	_proc_fds_table[cpid].uuid = proc_get_uuid(cpid);
 	
 	int32_t i;
 	for(i=0; i<PROC_FILE_MAX; i++) {
@@ -911,20 +929,25 @@ static void do_vfs_proc_clone(int32_t pid, proto_t* in) {
 	}
 }
 
+/*
+static void check_procs(void) {
+	int32_t i;
+	for(i = 0; i<PROC_MAX; i++) {
+		if(_proc_fds_table[i].state != UNUSED) {
+			if(proc_get_uuid(i) != _proc_fds_table[i].uuid) {
+				vfs_proc_exit(i);
+			}
+		}
+	}
+}
+*/
+
 static void do_vfs_proc_exit(int32_t pid, proto_t* in) {
 	(void)pid;
 	int cpid = proto_read_int(in);
 	if(cpid < 0)
 		return;
-	int32_t i;
-	for(i=0; i<PROC_FILE_MAX; i++) {
-		file_t *f = &_proc_fds_table[cpid].fds[i];
-		if(f->node != NULL) {
-			proc_file_close(cpid, i, f, true);
-		}
-		memset(f, 0, sizeof(file_t));
-	}
-	_proc_fds_table[cpid].state = UNUSED;
+	vfs_proc_exit(cpid);
 }
 
 static void handle(int pid, int cmd, proto_t* in, proto_t* out, void* p) {
@@ -1038,8 +1061,12 @@ int main(int argc, char** argv) {
 			handle_close_event(&ev);
 			ipc_enable();
 		}
-		/*else {
-			sleep(0);
+		/*
+		else {
+			ipc_disable();
+			check_procs();
+			ipc_enable();
+			usleep(3000);
 		}
 		*/
 	}

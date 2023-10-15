@@ -4,6 +4,7 @@
 #include <string.h>
 #include <fbd/fbd.h>
 #include <graph/graph.h>
+#include <upng/upng.h>
 #include <arch/miyoo/framebuffer.h>
 
 
@@ -91,6 +92,7 @@ int main(int argc, char** argv) {
 		h = atoi(argv[3]);
 	}
 	
+	fbd.splash = NULL;
 	fbd.flush = flush;
 	fbd.init = init;
 	fbd.get_info = get_info;

@@ -280,7 +280,7 @@ int main(int argc, char** argv) {
 			ipc_enable();
 		}
 		/*else {
-			sleep(0);
+			usleep(2000);
 		}
 		*/
 	}

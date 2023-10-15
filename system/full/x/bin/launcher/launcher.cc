@@ -83,6 +83,11 @@ class Launcher: public XWin {
 protected:
 	void onRepaint(graph_t* g) {
 		graph_clear(g, bgColor);
+		if(color_a(bgColor) != 0xff)
+			setAlpha(true);
+		else
+			setAlpha(false);
+
 		int i, j, itemH, itemW;
 		//cols = g->w / items.item_size;
 		//rows = items.num / cols;
@@ -288,7 +293,7 @@ public:
 		return height;
 	}
 
-	inline uint32_t getWide() {
+	inline uint32_t getWidth() {
 		return (items.icon_size + items.marginH) * items.num;
 	}
  
@@ -330,16 +335,17 @@ int main(int argc, char* argv[]) {
 
 	xscreen_t scr;
 	Launcher xwin;
-	xwin.readConfig("/etc/x/launcher.conf");
+	const char* cfg = x_get_theme_fname("launcher.conf");
+	xwin.readConfig(cfg);
 	xwin.loadApps();
 
 	X x;
 	x.screenInfo(scr, 0);
 
-	uint32_t h = xwin.getHeight();
+	int32_t h = xwin.getHeight();
 	if(h == 0)
 		h = scr.size.h;
-	uint32_t w = xwin.getWide();
+	int32_t w = xwin.getWidth();
 	if(w == 0)
 		w = scr.size.w;
 	x.open(&xwin, (scr.size.w-w)/2,
@@ -348,7 +354,7 @@ int main(int argc, char* argv[]) {
 			h,
 			"launcher",
 			X_STYLE_NO_TITLE | X_STYLE_NO_RESIZE | X_STYLE_LAUNCHER | X_STYLE_SYSBOTTOM);
-			//X_STYLE_NO_FRAME | X_STYLE_ALPHA | X_STYLE_LAUNCHER | X_STYLE_SYSBOTTOM);
+			//X_STYLE_NO_FRAME | X_STYLE_LAUNCHER | X_STYLE_SYSBOTTOM);
 
 	xwin.setVisible(true);
 

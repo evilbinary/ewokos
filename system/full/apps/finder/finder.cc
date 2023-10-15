@@ -23,7 +23,7 @@ class Finder: public XWin {
 	uint32_t titleBGColor;
 	graph_t* dirIcon;
 	graph_t* fileIcon;
-	uint32_t itemSize;
+	int itemSize;
 
 	int     mouse_last_y;
 	int     selected;
@@ -67,11 +67,15 @@ class Finder: public XWin {
 		else if(check(fname, ".png")) {
 			snprintf(cmd, FS_FULL_NAME_MAX, "/bin/x/png %s", fname);
 		}
+		else if(check(fname, ".mp3")) {
+			snprintf(cmd, FS_FULL_NAME_MAX, "/bin/mp3play %s", fname);
+		}
 		else if(check(fname, ".wav")) {
 			snprintf(cmd, FS_FULL_NAME_MAX, "/bin/aplay -f %s", fname);
 		}
 		else {//if(check(fname, ".txt")) {
-			snprintf(cmd, FS_FULL_NAME_MAX, "/apps/book/book %s", fname);
+			//snprintf(cmd, FS_FULL_NAME_MAX, "/apps/book/book %s", fname);
+			snprintf(cmd, FS_FULL_NAME_MAX, "/apps/xtext/xtext %s", fname);
 		}
 		if(cmd[0] == 0)
 			return;
@@ -130,8 +134,13 @@ protected:
 		int xMargin = 8;
 
 		graph_clear(g, bgColor);
-		graph_fill(g, 0, 0, g->w, h, titleBGColor);
-		snprintf(name, FS_FULL_NAME_MAX, "[%s]", cwd);
+
+		graph_fill_3d(g, 0, 0, g->w, h, titleBGColor, false);
+
+		if(strcmp(cwd, "/") == 0)
+			snprintf(name, FS_FULL_NAME_MAX, "[%s]", cwd);
+		else
+			snprintf(name, FS_FULL_NAME_MAX, ".. [%s]", cwd);
 		if(dirIcon != NULL) {
 			int iconMargin = (itemSize - dirIcon->h)/2;
 			graph_blt_alpha(dirIcon, 0, 0, dirIcon->w, dirIcon->h,
@@ -167,10 +176,11 @@ protected:
 	}
 
 	void mouseHandle(xevent_t* ev) {
+		gpos_t pos = getInsidePos(ev->value.mouse.x, ev->value.mouse.y);
 		int h = itemSize;
 		if(ev->state == XEVT_MOUSE_DOWN) {
 			mouse_last_y = ev->value.mouse.y;
-			int at = ev->value.mouse.winy / itemSize;
+			int at = pos.y / itemSize;
 			selected = at-1 + start;
 			repaint();
 			return;
@@ -189,7 +199,7 @@ protected:
 			}
 		}
 		else if(ev->state == XEVT_MOUSE_CLICK) {
-			int at = ev->value.mouse.winy / itemSize;
+			int at = pos.y / itemSize;
 			if(at == 0) {
 				upBack();
 				return;
@@ -262,6 +272,7 @@ public:
 		titleBGColor = 0xffaaaaaa;
 		fileIcon = png_image_new("/data/icons/system/32/file.png");
 		dirIcon = png_image_new("/data/icons/system/32/dir.png");
+		font_load("/data/fonts/system.ttf", 14, &font);
 		itemSize = 36;
 
 		selected = 0;
@@ -291,35 +302,50 @@ public:
 		v = sconf_get(conf, "font");
 		if(v[0] == 0) 
 			v = "/data/fonts/system.ttf";
+		font_close(&font);
 		font_load(v, font_size, &font);
 
 		v = sconf_get(conf, "item_size");
 		if(v[0] != 0)
 			itemSize = atoi(v);
+		if(font.max_size.y > itemSize)
+			itemSize = font.max_size.y;
+
 		v = sconf_get(conf, "bg_color");
 		if(v[0] != 0)
 			bgColor = atoi_base(v, 16);
+
 		v = sconf_get(conf, "fg_color");
 		if(v[0] != 0)
 			fgColor = atoi_base(v, 16);
+
 		v = sconf_get(conf, "select_color");
 		if(v[0] != 0)
 			selectColor = atoi_base(v, 16);
+
 		v = sconf_get(conf, "hide_color");
 		if(v[0] != 0)
 			hideColor = atoi_base(v, 16);
+
 		v = sconf_get(conf, "title_color");
 		if(v[0] != 0)
 			titleColor = atoi_base(v, 16);
+
 		v = sconf_get(conf, "title_bg_color");
 		if(v[0] != 0)
 			titleBGColor = atoi_base(v, 16);
+
 		v = sconf_get(conf, "file_icon");
-		if(v[0] != 0)
+		if(v[0] != 0) {
+			graph_free(fileIcon);
 			fileIcon = png_image_new(v);
+		}
+
 		v = sconf_get(conf, "dir_icon");
-		if(v[0] != 0)
+		if(v[0] != 0) {
+			graph_free(dirIcon);
 			dirIcon = png_image_new(v);
+		}
 
 		sconf_free(conf);
 		return true;
@@ -331,15 +357,12 @@ int main(int argc, char* argv[]) {
 	(void)argv;
 
 	Finder xwin;
-	xwin.readConfig("/etc/x/finder.conf");
+	xwin.readConfig(x_get_theme_fname("finder.conf"));
 
 	X x;
-	x.open(&xwin, 10,
-			30,
-			300,
-			200,
-			"finder",
-			X_STYLE_NORMAL);
+	xscreen_t scr;
+	x.screenInfo(scr, 0);
+	x.open(&scr, &xwin, 300, 0, "finder", X_STYLE_NORMAL);
 
 	xwin.setVisible(true);
 	x.run(NULL);

@@ -240,11 +240,13 @@ void graph_draw_char_font_fixed(graph_t* g, int32_t x, int32_t y, TTY_U32 c,
 	TTY_Glyph glyph;
 	if(font_get_glyph(font, c, &glyph) != 0)
 		return;
-
+	TTY_U16 fw, fh;
+	fw = glyph.offset.x + (glyph.size.x == 0 ?  glyph.advance.x : glyph.size.x);
+	fh = glyph.offset.y + (glyph.size.y == 0 ?  glyph.advance.y : glyph.size.y);
 	if(w > 0)
-		x = x + (((TTY_S32)w) - glyph.size.x)/2 - glyph.offset.x;
+		x = x + (((TTY_S32)w) - fw) / 2;
 	if(h > 0)
-		y = y + (((TTY_S32)h) - glyph.size.y)/2 - glyph.offset.y;
+		y = y + (((TTY_S32)h) - fh) / 2;
 	
 	if(glyph.cache != NULL) {
 		for (TTY_S32 j = 0; j < font->max_size.y; j++) {
@@ -277,6 +279,17 @@ void graph_draw_text_font(graph_t* g, int32_t x, int32_t y, const char* str,
 		x += dx;
 	}
 	free(out);
+}
+
+void graph_draw_text_font_align(graph_t* g, int32_t x, int32_t y, int32_t w, int32_t h,
+		const char* str, font_t* font, uint32_t color, uint32_t align) {
+	int32_t fw, fh;
+	font_text_size(str, font, &fw, &fh);
+	if((align & FONT_ALIGN_CENTER) != 0) {
+		x = x + (w-fw)/2;
+		y = y + (h-fh)/2;
+	}
+	graph_draw_text_font(g, x, y, str, font, color);
 }
 
 #ifdef __cplusplus
