@@ -23,13 +23,15 @@ extern "C"
 #include <usbd/devicerequest.h>
 #include <usbd/pipe.h>
 
+extern u32 _v_mmio_base;
+
 /**
 	\brief Performs all necessary operationg to start the USB driver.
 
 	Initialises the USB driver by performing necessary interfactions with the
 	host controller driver, and enumerating the device tree.
 */
-Result UsbInitialise();
+Result UsbInitialise(u32 v_mmio_base);
 
 /**
 	\brief Gets the descriptor for a given device.

@@ -1,21 +1,31 @@
 ROOT_DIR = ../../..
 BUILD_DIR = $(ROOT_DIR)/build
 TARGET_DIR = $(BUILD_DIR)/rootfs
+HW=miyoo
 
 export ARCH=arm
-export NEON=yes
+export G_2D_BOOST=yes
 
 all: basic_sys
 	@echo "all done."
+	rm -fr $(BUILD_DIR)/$(HW)
+	mv $(TARGET_DIR) $(BUILD_DIR)/$(HW)
+	cp -r $(BUILD_DIR)/include $(BUILD_DIR)/$(HW)
+	cp -r $(BUILD_DIR)/lib $(BUILD_DIR)/$(HW)
 
 include ../make.inc
 
 extra: basic_sys extra_sys
 	@echo "all done."
+	rm -fr $(BUILD_DIR)/$(HW)
+	mv $(TARGET_DIR) $(BUILD_DIR)/$(HW)
+	cp -r $(BUILD_DIR)/include $(BUILD_DIR)/$(HW)
+	cp -r $(BUILD_DIR)/lib $(BUILD_DIR)/$(HW)
 
 basic_sys: kernel_heads 
-	mkdir -p $(TARGET_DIR)/drivers/miyoo
 	rm -f $(BUILD_DIR)/lib/libbsp.a
+
+	mkdir -p $(TARGET_DIR)/drivers/$(HW)
 	cd libs;make
 	cd $(ROOT_DIR)/basic;make
 	cd $(ROOT_DIR)/full;make
@@ -31,4 +41,4 @@ clean:
 	cd $(ROOT_DIR)/full;make clean
 	cd $(ROOT_DIR)/basic;make clean
 	cd $(ROOT_DIR)/extra;make clean
-	rm -fr $(ROOT_DIR)/build
+	rm -fr $(ROOT_DIR)/build/$(HW)

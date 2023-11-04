@@ -17,7 +17,7 @@ int font_init(void) {
 	return 0;
 }
 
-int font_load(const char* fname, uint16_t ppm, font_t* font) {
+static int font_load_raw(const char* fname, uint16_t ppm, font_t* font) {
 	if(_font_dev_pid < 0)
 		return -1;
 
@@ -41,6 +41,17 @@ int font_load(const char* fname, uint16_t ppm, font_t* font) {
 	return ret;
 }
 
+int font_load(const char* fname, uint16_t ppm, font_t* font, bool safe) {
+	if(_font_dev_pid < 0)
+		return -1;
+	
+	if(font_load_raw(fname, ppm, font) == 0)
+		return 0;
+	if(safe)
+		return font_load_raw(DEFAULT_SYSTEM_FONT, ppm, font);
+	return -1;
+}
+
 static int free_cache(const char* key, any_t data, any_t arg) {
 	map_t* map = (map_t*)arg;
 	TTY_Glyph* v = (TTY_Glyph*)data;
@@ -49,6 +60,21 @@ static int free_cache(const char* key, any_t data, any_t arg) {
 		free(v->cache);
 	free(v);
 	return MAP_OK;
+}
+
+font_t* font_new(const char* fname, uint16_t ppm, bool safe) {
+	font_t* font = (font_t*)calloc(sizeof(font_t), 1);
+	if(font_load(fname, ppm, font, safe) == 0)
+		return font;
+	free(font);
+	return NULL;
+}
+
+int font_free(font_t* font) {
+	if(font == NULL)
+		return -1;
+	font_close(font);
+	free(font);
 }
 
 static void font_clear_cache(font_t* font) {

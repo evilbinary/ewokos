@@ -81,11 +81,12 @@ int main(int argc, char* argv[]) {
 	}
 
 	X x;
-
+	grect_t desk;
+	x.getDesktopSpace(desk, 0);
 	Png xwin;
-	x.open(&xwin, 30, 30, img->w, img->h+60,
-			"png", X_STYLE_NORMAL | X_STYLE_NO_RESIZE);
-			//"png", X_STYLE_NO_FRAME | X_STYLE_NO_FOCUS);
+	x.open(&desk, &xwin, img->w, img->h, "png",
+			XWIN_STYLE_NORMAL | XWIN_STYLE_NO_RESIZE);
+			//XWIN_STYLE_NO_FRAME | XWIN_STYLE_NO_FOCUS);
 	xwin.setImage(img);
 	xwin.setAlpha(true);
 	xwin.setVisible(true);

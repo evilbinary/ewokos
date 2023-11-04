@@ -3,13 +3,12 @@
 #include <kernel/kernel.h>
 #include <kernel/hw_info.h>
 #include <kstring.h>
-#include "arch.h"
+#include "hw_arch.h"
 
 /* memory mapping for the prime interrupt controller */
 #define PIC (_sys_info.mmio.v_base + 0xB200)
 #define PIC_INT_UART0 (25+64)
 #define PIC_INT_SDC (30)
-
 
 #define IRQ_IS_BASIC(x) ((x) >= 64 )
 #define IRQ_IS_GPU2(x) ((x) >= 32 && (x) < 64 )
@@ -41,7 +40,6 @@ void irq_arch_init(void) {
 
 
 inline void irq_enable(uint32_t irqs) {
-	(void)irqs;
   if((irqs & IRQ_TIMER0) != 0) {
   	enable_irq(64);
 	}

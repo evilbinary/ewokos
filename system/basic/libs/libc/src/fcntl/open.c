@@ -10,7 +10,7 @@ int open(const char* fname, int oflag) {
 	bool created = false;
 	fsinfo_t info;
 
-	if(vfs_get(fname, &info) != 0) {
+	if(vfs_get_by_name(fname, &info) != 0) {
 		if((oflag & O_CREAT) != 0) {
 			if(vfs_create(fname, &info, FS_TYPE_FILE, false, false) != 0)
 				return -1;
@@ -21,10 +21,10 @@ int open(const char* fname, int oflag) {
 		}	
 	}
 
-	fd = vfs_open(&info, oflag);
+	fd = vfs_open(info.node, oflag);
 	if(fd < 0) {
 		if(created)
-			vfs_del(&info);
+			vfs_del_node(&info);
 		return -1;
 	}
 	
@@ -33,14 +33,14 @@ int open(const char* fname, int oflag) {
 
 	PF->init(&in)->
 		addi(&in, fd)->
-		add(&in, &info, sizeof(fsinfo_t))->
+		addi(&in, info.node)->
 		addi(&in, oflag);
 
 	if(ipc_call(info.mount_pid, FS_CMD_OPEN, &in, &out) != 0 ||
 			proto_read_int(&out) != 0) {
 		vfs_close(fd);
 		if(created)
-			vfs_del(&info);
+			vfs_del_node(&info);
 		fd = -1;
 	}
 

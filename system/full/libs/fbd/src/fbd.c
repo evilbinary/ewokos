@@ -9,6 +9,7 @@
 #include <fb/fb.h>
 #include <fbd/fbd.h>
 #include <upng/upng.h>
+#include <sconf/sconf.h>
 
 typedef struct {
 	uint32_t size;
@@ -18,10 +19,11 @@ typedef struct {
 static fbinfo_t* _fbinfo = NULL;
 static int32_t _rotate = 0;
 static fbd_t* _fbd = NULL;
+static char _logo[256];
 
 static int fb_fcntl(int fd, 
 		int from_pid,
-		fsinfo_t* info, 
+		uint32_t node, 
 		int cmd, 
 		proto_t* in, 
 		proto_t* out,
@@ -29,7 +31,7 @@ static int fb_fcntl(int fd,
 
 	(void)fd;
 	(void)from_pid;
-	(void)info;
+	(void)node;
 	(void)in;
 	(void)p;
 	if(cmd == FB_CNTL_GET_INFO) { //get fb size
@@ -59,31 +61,22 @@ static int fb_fcntl(int fd,
 */
 
 static void draw_bg(graph_t* g) {
-	int sz = 2; 
-	int x = 0;
-	int y = 0;
-	bool shift = false;
-
-	graph_clear(g, 0xffdddddd);
-
-	for(int i=0; y<g->h; i++) {
-		for(int j=0; x<g->w;j++) {
-			graph_fill(g, x, y, sz, sz, 0xff555555);
-			x += sz*2;
-		}
-		x = shift ? 0:sz;
-		shift = !shift;
-		y += sz;
-	}
+	graph_draw_dot_pattern(g, 0, 0, g->w, g->h, 0xffffffff, 0xff555555);
 }
 
 static void default_splash(graph_t* g) {
 	draw_bg(g);
-	graph_t* logo = png_image_new("/data/images/splash.png");
+	graph_t* logo = png_image_new(_logo);
 	if(logo != NULL) {
 		graph_blt_alpha(logo, 0, 0, logo->w, logo->h,
 				g, (g->w-logo->w)/2, (g->h-logo->h)/2, logo->w, logo->h, 0xff);
 		graph_free(logo);
+	}
+
+	if(graph_2d_boosted_bsp()) {
+		graph_fill_circle(g, (g->w-logo->w)/2+2, (g->h-logo->h)/2+2, 8, 0x88000000);
+		graph_fill_circle(g, (g->w-logo->w)/2, (g->h-logo->h)/2, 7, 0xff0000ff);
+		graph_circle(g, (g->w-logo->w)/2, (g->h-logo->h)/2, 8, 0xffffffff);
 	}
 }
 
@@ -152,31 +145,66 @@ static int32_t do_flush(fb_dma_t* dma) {
 0: error;
 -1: resized;
 >0: size flushed*/
-static int do_fb_flush(int fd, int from_pid, fsinfo_t* info, void* p) {
+static int do_fb_flush(int fd, int from_pid, uint32_t node, void* p) {
 	(void)fd;
 	(void)from_pid;
-	(void)info;
+	(void)node;
 	fb_dma_t* dma = (fb_dma_t*)p;
 	return do_flush(dma);
 }
 
-static void* fb_dma(int fd, int from_pid, fsinfo_t* info, int* size, void* p) {
+static void* fb_dma(int fd, int from_pid, uint32_t node, int* size, void* p) {
 	(void)fd;
 	(void)from_pid;
-	(void)info;
+	(void)node;
 	fb_dma_t* dma = (fb_dma_t*)p;
 	*size = dma->size;
 	return dma->shm;
 }
 
-int fbd_run(fbd_t* fbd, const char* mnt_name, uint32_t w, uint32_t h, uint32_t rotate) {
+static void read_config(uint32_t* w, uint32_t* h, uint8_t* dep, int32_t* rotate) {
+	strncpy(_logo, "/usr/system/images/logos/logo.png", 255);
+
+	sconf_t *conf = sconf_load("/etc/framebuffer.conf");	
+	if(conf == NULL)
+		return;
+
+	const char* v = sconf_get(conf, "width");
+	if(v[0] != 0)
+		*w = atoi(v);
+
+	v = sconf_get(conf, "height");
+	if(v[0] != 0)
+		*h = atoi(v);
+
+	v = sconf_get(conf, "depth");
+	if(v[0] != 0) 
+		*dep = atoi(v);
+
+	v = sconf_get(conf, "rotate");
+	if(v[0] != 0) 
+		*rotate = atoi(v);
+
+	v = sconf_get(conf, "logo");
+	if(v[0] != 0) 
+		strncpy(_logo, v, 255);
+
+	sconf_free(conf);
+}
+
+int fbd_run(fbd_t* fbd, const char* mnt_name,
+		uint32_t def_w, uint32_t def_h, int32_t def_rotate) {
 	_fbd = fbd;
-	_rotate = 0;
-	_rotate = rotate;
+	uint32_t w = def_w, h = def_h;
+	uint8_t dep = 32;
+	_rotate = def_rotate;
+
+
+	read_config(&w, &h, &dep, &_rotate);
 
 	fb_dma_t dma;
 	dma.shm = NULL;
-	if(fbd->init(w, h, 32) != 0)
+	if(fbd->init(w, h, dep) != 0)
 		return -1;
 	_fbinfo = fbd->get_info();
 	

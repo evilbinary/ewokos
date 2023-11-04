@@ -23,6 +23,9 @@ typedef struct {
 
 int32_t bcm283x_fb_init(uint32_t w, uint32_t h, uint32_t dep) {
 	memset(&_fb_info, 0, sizeof(fbinfo_t));
+	sys_info_t sysinfo;
+	syscall1(SYS_GET_SYS_INFO, (int32_t)&sysinfo);
+
 	bcm283x_mailbox_init();
 	fb_init_t* fbinit = (fb_init_t*)dma_map(sizeof(fb_init_t));
 	
@@ -40,7 +43,7 @@ int32_t bcm283x_fb_init(uint32_t w, uint32_t h, uint32_t dep) {
 	bcm283x_mailbox_send(FRAMEBUFFER_CHANNEL, &msg);
 	bcm283x_mailbox_read(FRAMEBUFFER_CHANNEL, &msg);
 
-    if(fbinit->pointer == NULL)
+	if(fbinit->pointer == NULL)
 		return -1;
 
 	_fb_info.width = fbinit->width;
@@ -55,13 +58,9 @@ int32_t bcm283x_fb_init(uint32_t w, uint32_t h, uint32_t dep) {
 	_fb_info.xoffset = 0;
 	_fb_info.yoffset = 0;
 
-	sys_info_t sysinfo;
-	syscall1(SYS_GET_SYS_INFO, (int32_t)&sysinfo);
-
 	if(_fb_info.pointer < sysinfo.kernel_base) {
 		_fb_info.pointer += sysinfo.kernel_base;
 	}
-
 	_fb_info.size_max = sysinfo.phy_mem_size - (_fb_info.pointer-sysinfo.kernel_base);
 	syscall3(SYS_MEM_MAP, _fb_info.pointer, _fb_info.pointer-sysinfo.kernel_base, _fb_info.size_max);
 	return 0;

@@ -79,7 +79,7 @@ int rgb2nv12(uint8_t  *out,  uint32_t *in , int w, int h)
 }
 
 
-int32_t fb_init(uint32_t w, uint32_t h, fbinfo_t* fbinfo) {
+int32_t fb_init_bsp(uint32_t w, uint32_t h, uint8_t dep, fbinfo_t* fbinfo) {
 	panel_init();
 	fbinfo->width = 640;
 	fbinfo->height = 480;
@@ -92,6 +92,6 @@ int32_t fb_init(uint32_t w, uint32_t h, fbinfo_t* fbinfo) {
 	return 0;
 }
 
-void fb_flush32(uint32_t* g32, uint32_t w, uint32_t h) {
+void fb_flush32_bsp(uint32_t* g32, uint32_t w, uint32_t h) {
 	rgb2nv12(0x87c00000, g32, w, h);	
 }

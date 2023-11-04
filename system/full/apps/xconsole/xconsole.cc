@@ -68,17 +68,11 @@ public:
 		if(v[0] != 0) 
 			console.textview.font_fixed = atoi(v);
 
-		v = sconf_get(sconf, "font_shadow");
-		if(v[0] != 0) {
-			console.textview.shadow = true;
-			console.textview.shadow_color = atoi_base(v, 16);
-		}
-
 		v = sconf_get(sconf, "font");
 		if(v[0] == 0) 
-			v = "/user/system/fonts/system.ttf";
+			v = DEFAULT_SYSTEM_FONT;
 		
-		font_load(v, font_size, &console.textview.font);
+		font_load(v, font_size, &console.textview.font, true);
 
 		sconf_free(sconf);
 
@@ -193,13 +187,13 @@ static int run(int argc, char* argv[]) {
 	(void)argv;
 
 	XConsole xwin;
-	xwin.readConfig(x_get_theme_fname("/user/x/themes", "xconsole", "theme.conf"));
+	xwin.readConfig(x_get_theme_fname(X_THEME_ROOT, "xconsole", "theme.conf"));
 
 
 	X x;
-	xscreen_t scr;
- 	x.screenInfo(scr, 0);
-	x.open(&xwin, 64, 40, scr.size.w*3/4, scr.size.h*3/4, "xconsole", 0);
+	grect_t desk;
+ 	x.getDesktopSpace(desk, 0);
+	x.open(&desk, &xwin, desk.w*3/4, desk.h*3/4, "xconsole", 0);
 	xwin.setVisible(true);
 
 	pthread_t tid;

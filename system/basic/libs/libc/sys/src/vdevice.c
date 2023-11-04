@@ -17,15 +17,14 @@ extern "C" {
 #endif
 
 static void do_open(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
-	fsinfo_t info;
 	int oflag;
 	int fd = proto_read_int(in);
-	proto_read_to(in, &info, sizeof(fsinfo_t));
+	uint32_t node = proto_read_int(in);
 	oflag = proto_read_int(in);
 	
 	int res = 0;
 	if(fd >= 0 && dev != NULL && dev->open != NULL) {
-		if(dev->open(fd, from_pid, &info, oflag, p) != 0) {
+		if(dev->open(fd, from_pid, node, oflag, p) != 0) {
 			res = -1;
 		}
 	}
@@ -34,24 +33,22 @@ static void do_open(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, voi
 
 static void do_close(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
 	(void)out;
-	fsinfo_t info;
 	int fd = proto_read_int(in);
 	int pid = proto_read_int(in);
 	if(pid < 0)
 		pid = from_pid;
-	proto_read_to(in, &info, sizeof(fsinfo_t));
+	uint32_t node = (uint32_t)proto_read_int(in);
 
 	if(dev != NULL && dev->close != NULL) {
-		dev->close(fd, pid, &info, p);
+		dev->close(fd, pid, node, p);
 	}
 }
 
 #define READ_BUF_SIZE 32
 static void do_read(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
 	int size, offset;
-	fsinfo_t info;
 	int fd = proto_read_int(in);
-	proto_read_to(in, &info, sizeof(fsinfo_t));
+	uint32_t node = (uint32_t)proto_read_int(in);
 	size = proto_read_int(in);
 	offset = proto_read_int(in);
 	void* shm = (void*)proto_read_int(in);
@@ -72,7 +69,7 @@ static void do_read(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, voi
 			PF->addi(out, -1);
 		}
 		else {
-			size = dev->read(fd, from_pid, &info, buf, size, offset, p);
+			size = dev->read(fd, from_pid, node, buf, size, offset, p);
 			PF->addi(out, size);
 			if(size > 0) {
 				if(shm == NULL) {
@@ -93,9 +90,8 @@ static void do_read(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, voi
 
 static void do_write(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
 	int32_t size, offset;
-	fsinfo_t info;
 	int fd = proto_read_int(in);
-	memcpy(&info, proto_read(in, NULL), sizeof(fsinfo_t));
+	uint32_t node = (uint32_t)proto_read_int(in);
 	offset = proto_read_int(in);
 	void *shm = (void*)proto_read_int(in);
 	
@@ -112,7 +108,7 @@ static void do_write(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, vo
 			PF->addi(out, -1);
 		}
 		else {
-			size = dev->write(fd, from_pid, &info, data, size, offset, p);
+			size = dev->write(fd, from_pid, node, data, size, offset, p);
 			PF->addi(out, size);
 		}
 		if(shm != NULL)
@@ -173,22 +169,20 @@ static void do_write_block(vdevice_t* dev, int from_pid, proto_t *in, proto_t* o
 }
 
 static void do_dma(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
-	fsinfo_t info;
 	int fd = proto_read_int(in);
-	memcpy(&info, proto_read(in, NULL), sizeof(fsinfo_t));
+	uint32_t node = (uint32_t)proto_read_int(in);
 
 	int id = -1;	
 	int size = 0;
 	if(dev != NULL && dev->dma != NULL) {
-		id = dev->dma(fd, from_pid, &info, &size, p);
+		id = dev->dma(fd, from_pid, node, &size, p);
 	}
 	PF->addi(out, id)->addi(out, size);
 }
 
 static void do_fcntl(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
-	fsinfo_t info;
 	int fd = proto_read_int(in);
-	proto_read_to(in, &info, sizeof(fsinfo_t));
+	uint32_t node = proto_read_int(in);
 	int32_t cmd = proto_read_int(in);
 
 	proto_t arg_in, arg_out;
@@ -200,7 +194,7 @@ static void do_fcntl(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, vo
 
 	int res = -1;
 	if(dev != NULL && dev->fcntl != NULL) {
-		res = dev->fcntl(fd, from_pid, &info, cmd, &arg_in, &arg_out, p);
+		res = dev->fcntl(fd, from_pid, node, cmd, &arg_in, &arg_out, p);
 	}
 	PF->clear(&arg_in);
 
@@ -212,52 +206,51 @@ static void do_flush(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, vo
 	(void)from_pid;
 	fsinfo_t info;
 	int fd = proto_read_int(in);
-	memcpy(&info, proto_read(in, NULL), sizeof(fsinfo_t));
+	uint32_t node = (uint32_t)proto_read_int(in);
 
 	int ret = 0;
 	if(dev != NULL && dev->flush != NULL) {
-		ret = dev->flush(fd, from_pid, &info, p);
+		ret = dev->flush(fd, from_pid, node, p);
 	}
 	PF->addi(out, ret);
 }
 
 static void do_create(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
 	(void)from_pid;
-	fsinfo_t info_to, info;
-	proto_read_to(in, &info_to, sizeof(fsinfo_t));
-	proto_read_to(in, &info, sizeof(fsinfo_t));
+	uint32_t node_to = (uint32_t)proto_read_int(in);
+	uint32_t node = (uint32_t)proto_read_int(in);
 
+	fsinfo_t info;
 	int res = -1;
-	if(dev != NULL && dev->create != NULL) {
-		res = dev->create(&info_to, &info, p);
-	}
+	if(dev != NULL && dev->create != NULL)
+		res = dev->create(node_to, node, p, &info);
 
-	PF->addi(out, res)->add(out, &info, sizeof(fsinfo_t));
+	if(res == 0) {
+		PF->addi(out, res)->add(out, &info, sizeof(fsinfo_t));
+		return;
+	}		
+	PF->addi(out, -1);
 }
 
 static void do_unlink(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
 	(void)from_pid;
-	fsinfo_t info_to, info;
-	proto_read_to(in, &info_to, sizeof(fsinfo_t));
+	uint32_t node = (uint32_t)proto_read_int(in);
 	const char* fname = proto_read_str(in);
 
 	int res = 0;
 	if(dev != NULL && dev->unlink != NULL) {
-		res = dev->unlink(&info, fname, p);
+		res = dev->unlink(node, fname, p);
 	}
 	PF->addi(out, res);
 }
 
 static void do_clear_buffer(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
 	(void)from_pid;
-	fsinfo_t info;
-	proto_read_to(in, &info, sizeof(fsinfo_t));
+	uint32_t node = proto_read_int(in);
 
 	int res = -1;
-	if(dev != NULL && dev->clear_buffer != NULL) {
-		res = dev->clear_buffer(&info, p);
-	}
-
+	if(dev != NULL && dev->clear_buffer != NULL)
+		res = dev->clear_buffer(node, p);
 	PF->addi(out, res);
 }
 
@@ -345,19 +338,22 @@ static void handle(int from_pid, int cmd, proto_t* in, proto_t* out, void* p) {
 static int do_mount(vdevice_t* dev, fsinfo_t* mnt_point, int type) {
 	fsinfo_t info;
 	memset(&info, 0, sizeof(fsinfo_t));
+
+	//create a non-father node 
 	strcpy(info.name, mnt_point->name);
 	info.type = type;
-	vfs_new_node(&info);
+	vfs_new_node(&info, 0); // 0 means no father node
 
-	if(dev->mount != NULL) {
+	if(dev->mount != NULL) { //do device mount precess
 		if(dev->mount(&info, dev->extra_data) != 0) {
-			vfs_del(&info);
+			vfs_del_node(&info);
 			return -1;
 		}
 	}
 
-	if(vfs_mount(mnt_point, &info) != 0) {
-		vfs_del(&info);
+	//mount the new node to mnt_point, previous node will be saved as well
+	if(vfs_mount(mnt_point->node, info.node) != 0) {
+		vfs_del_node(&info);
 		return -1;
 	}
 	memcpy(mnt_point, &info, sizeof(fsinfo_t));
@@ -377,7 +373,7 @@ int device_run(vdevice_t* dev, const char* mnt_point, int mnt_type) {
 	
 	fsinfo_t mnt_point_info;
 	if(mnt_point != NULL) {
-		if(vfs_get(mnt_point, &mnt_point_info) != 0) {
+		if(vfs_get_by_name(mnt_point, &mnt_point_info) != 0) {
 			if(vfs_create(mnt_point, &mnt_point_info, mnt_type, true, true) != 0)
 				return -1;
 		}
@@ -402,9 +398,9 @@ int device_run(vdevice_t* dev, const char* mnt_point, int mnt_type) {
 	}
 
 	if(mnt_point != NULL && dev->umount != NULL) {
-		dev->umount(&mnt_point_info, dev->extra_data);
+		dev->umount(mnt_point_info.node, dev->extra_data);
 	}
-	vfs_umount(&mnt_point_info);
+	vfs_umount(mnt_point_info.node);
 	return 0;
 }
 
@@ -447,7 +443,7 @@ int dev_cntl_by_pid(int pid, int cmd, proto_t* in, proto_t* out) {
 
 int dev_get_pid(const char* fname) {
 	fsinfo_t info;
-	if(vfs_get(fname, &info) != 0)
+	if(vfs_get_by_name(fname, &info) != 0)
 		return -1;
 	return info.mount_pid;
 }

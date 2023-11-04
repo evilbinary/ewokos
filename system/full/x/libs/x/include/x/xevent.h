@@ -7,6 +7,7 @@
 extern "C" {
 #endif
 
+#define X_EVT_BLOCK_EVT			128
 
 enum {
 	XEVT_NONE = 0,
@@ -32,7 +33,8 @@ enum {
 	XEVT_WIN_FOCUS,
 	XEVT_WIN_UNFOCUS,
 	XEVT_WIN_VISIBLE,
-	XEVT_WIN_REPAINT
+	XEVT_WIN_REPAINT,
+	XEVT_WIN_REORG,
 };
 
 enum {

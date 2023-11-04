@@ -39,7 +39,7 @@ protected:
 public:
 	MyWidget() {
 		down = false;
-		font_load("/user/system/fonts/system.ttf", 14, &font);
+		font_load(DEFAULT_SYSTEM_FONT, 14, &font, true);
 	}
 
 	~MyWidget() {
@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
 
 	win.getWidget()->setType(Container::VERTICLE);
 
-	x.open(&win, 20, 20, 200, 200, "widgetTest", X_STYLE_NORMAL);
+	x.open(&win, 20, 20, 200, 200, "widgetTest", XWIN_STYLE_NORMAL);
 	win.setVisible(true);
 	//x.run(loop, &win);
 	x.run(NULL, &win);

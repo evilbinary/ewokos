@@ -1,58 +1,67 @@
 #include "cursor.h"
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sconf/sconf.h>
+#include <upng/upng.h>
+#include <x/x.h>
 
-static inline void draw_cursor_mouse(graph_t* g, int mx, int my, int mw, int mh, bool down) {
+static inline void draw_cursor_raw(graph_t* g, int mx, int my, int mw, int mh, bool down) {
 	(void)down;
 	int r = mw/2 <= mh/2 ? mw/2 : mh/2;
 	graph_fill_circle(g, mx+r, my+r, r, 0x88ffffff);
 	graph_fill_circle(g, mx+r, my+r, r*2/3, 0x88000000);
 }
 
-static inline void draw_cursor_x(graph_t* g, int mx, int my, int mw, int mh, bool down) {
-	(void)down;
-	graph_line(g, mx+1, my, mx+mw-1, my+mh-2, 0xffffffff);
-	graph_line(g, mx, my, mx+mw-1, my+mh-1, 0xff444444);
-	graph_line(g, mx, my+1, mx+mw-2, my+mh-1, 0xffffffff);
-
-	graph_line(g, mx, my+mh-2, mx+mw-2, my, 0xffffffff);
-	graph_line(g, mx, my+mh-1, mx+mw-1, my, 0xff444444);
-	graph_line(g, mx+1, my+mh-1, mx+mw-1, my+1, 0xffffffff);
-}
-
-static inline void draw_cursor_touch(graph_t* g, int mx, int my, int mw, int mh, bool down) {
-	if(!down)
-		return;
-	int r = mw/2 <= mh/2 ? mw/2 : mh/2;
-	graph_fill_circle(g, mx+r, my+r, r, 0x44ffffff);
-	graph_fill_circle(g, mx+r, my+r, r/2, 0x88ffffff);
-	graph_fill_circle(g, mx+r, my+r, r/4, 0x88000000);
-}
-
 void draw_cursor(graph_t* g, cursor_t* cursor, int mx, int my) {
-	if(cursor->type == CURSOR_TOUCH)
-		draw_cursor_touch(g, mx, my, cursor->size.w, cursor->size.h, cursor->down);
-	else if(cursor->type == CURSOR_MOUSE)
-		draw_cursor_mouse(g, mx, my, cursor->size.w, cursor->size.h, cursor->down);
+	if(cursor->type == CURSOR_TOUCH && !cursor->down)
+		return;
+
+	if(cursor->img == NULL)
+		draw_cursor_raw(g, mx, my, cursor->size.w, cursor->size.h, cursor->down);
 	else
-		draw_cursor_x(g, mx, my, cursor->size.w, cursor->size.h, cursor->down);
+		graph_blt_alpha(cursor->img, 0, 0, cursor->img->w, cursor->img->h,
+				g, mx, my, cursor->img->w, cursor->img->h, 0xff);
 }
 
-void cursor_init(cursor_t* cursor) {
-	if(cursor->type == CURSOR_TOUCH) {
-		cursor->size.w = 35; 
-		cursor->size.h = 35;
-		cursor->offset.x = cursor->size.w/2;
-		cursor->offset.y = cursor->size.h/2;
+void cursor_init(const char* theme, cursor_t* cursor) {
+	cursor->img = NULL;
+	cursor->size.w = 21;
+	cursor->size.h = 21;
+	cursor->offset.x = cursor->size.w/2;
+	cursor->offset.y = cursor->size.h/2;
+
+	char fname[256] = "";
+	snprintf(fname, 255, "%s/%s/xwm/cursors/%s.conf", X_THEME_ROOT, theme,
+			cursor->type == CURSOR_MOUSE ? "mouse":"touch");
+	sconf_t* sconf = sconf_load(fname);
+	if(sconf == NULL)
+		return;
+
+	const char* v = sconf_get(sconf, "x_offset");
+	if(v[0] != 0)
+		cursor->offset.x = atoi(v);
+
+	v = sconf_get(sconf, "y_offset");
+	if(v[0] != 0)
+		cursor->offset.y = atoi(v);
+	
+	v = sconf_get(sconf, "cursor");
+	if(v[0] != 0) {
+		if(v[0] != '/')
+			snprintf(fname, 255, "%s/%s/xwm/%s", X_THEME_ROOT, theme, v);
+		else
+			strncpy(fname, v, 255);
 	}
-	else if(cursor->type == CURSOR_MOUSE) {
-		cursor->size.w = 19;
-		cursor->size.h = 19;
-		cursor->offset.x = cursor->size.w/2;
-		cursor->offset.y = cursor->size.h/2;
+	cursor->img = png_image_new(fname);
+
+	if(cursor->img != NULL) { 
+		cursor->size.w = cursor->img->w; 
+		cursor->size.h = cursor->img->h; 
+		if(cursor->offset.x >= cursor->size.w)
+			cursor->offset.x = cursor->size.w - 1;
+		if(cursor->offset.y >= cursor->size.h)
+			cursor->offset.y = cursor->size.h - 1;
 	}
-	else {
-		cursor->size.w = 15;
-		cursor->size.h = 15;
-		cursor->offset.x = cursor->size.w/2;
-		cursor->offset.y = cursor->size.h/2;
-	}
+	sconf_free(sconf);
 }

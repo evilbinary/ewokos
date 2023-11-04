@@ -16,6 +16,8 @@
 #include "shell.h"
 
 bool _initrd = false;
+bool _stdio_inited = false;
+bool _stderr_console_inited = false;
 bool _terminated = false;
 
 old_cmd_t* _history = NULL;
@@ -43,7 +45,7 @@ static int32_t find_exec(char* fname, char* cmd) {
 	//if cmd file is fullpath.
 	if(cmd[0] == '/') {
 		strcpy(fname, cmd);
-		if(vfs_get(fname, &info) == 0 && info.type == FS_TYPE_FILE) {
+		if(vfs_get_by_name(fname, &info) == 0 && info.type == FS_TYPE_FILE) {
 			cmd[at] = c;
 			strcpy(fname, cmd);
 			return 0;
@@ -59,7 +61,7 @@ static int32_t find_exec(char* fname, char* cmd) {
 			path[i] = 0;
 			if(path[0] != 0) {
 				snprintf(fname, FS_FULL_NAME_MAX-1, "%s/%s", path, cmd);
-				if(vfs_get(fname, &info) == 0 && info.type == FS_TYPE_FILE) {
+				if(vfs_get_by_name(fname, &info) == 0 && info.type == FS_TYPE_FILE) {
 					cmd[at] = c;
 					snprintf(fname, FS_FULL_NAME_MAX-1, "%s/%s", path, cmd);
 					return 0;
@@ -179,14 +181,43 @@ static void prompt(void) {
 		printf("ewok(%s):%s$ ", cid, getcwd(cwd, FS_FULL_NAME_MAX));
 }
 
+static void try_init_stdio(void) {
+	if(!_stdio_inited) {
+		int fd = open("/dev/tty0", 0);
+		if(fd > 0) {
+			dup2(fd, 0);
+			dup2(fd, 1);
+			dup2(fd, 2);
+			close(fd);
+			_stdio_inited = true;
+		}
+	}
+
+	if(!_stderr_console_inited) {
+		int fd_console = open("/dev/console0", 0);
+		if(fd_console > 0) {
+			dup2(fd_console, 2);
+			close(fd_console);
+			_stderr_console_inited = true;
+		}
+	}
+}
+
 static void initrd_out(const char* cmd) {
 	if(!_initrd || cmd[0] == '@')
 		return;
 
-	if(write(1, cmd, strlen(cmd)) > 0)
-		write(1, "\n", 1);
-	else
+	try_init_stdio();
+
+	if(!_stdio_inited) {
 		klog("%s\n", cmd);
+		return;
+	}
+
+	if(_stderr_console_inited) {
+		if(write(1, cmd, strlen(cmd)) > 0)
+			write(1, "\n", 1);
+	}
 
 	if(write(2, cmd, strlen(cmd)) > 0)
 		write(2, "\n", 1);
@@ -194,6 +225,8 @@ static void initrd_out(const char* cmd) {
 
 int main(int argc, char* argv[]) {
 	_initrd = false;
+	_stdio_inited = false;
+	_stderr_console_inited = false;
 	_history = NULL;
 	_terminated = 0;
 
@@ -204,7 +237,7 @@ int main(int argc, char* argv[]) {
 		}
 		fd_in = open(argv[2], O_RDONLY);
 		if(fd_in < 0)
-			fd_in = 0;
+			return -1;
 	}
 
 	setenv("PATH", "/sbin:/bin:/bin/x");
@@ -223,15 +256,18 @@ int main(int argc, char* argv[]) {
 			break;
 
 		char* cmd = cmdstr->cstr;
-		if(cmd[0] == 0 || cmd[0] == '#')
+		if(cmd[0] == 0)
 			continue;
-		initrd_out(cmd);
-		
-		if(cmd[0] == '@')
-			cmd++;
+
+		if(_initrd) {
+			if(cmd[0] == '#')
+				continue;
+			initrd_out(cmd);
+			if(cmd[0] == '@')
+				cmd++;
+		}
 
 		add_history(cmdstr->cstr);
-
 		if(handle_shell_cmd(cmd) == 0)
 			continue;
 
@@ -244,7 +280,7 @@ int main(int argc, char* argv[]) {
 
 		int child_pid = fork();
 		if (child_pid == 0) {
-			if(fg == 0)
+			if(fg == 0 || _initrd)
 				proc_detach();
 			int res = run_cmd(cmd);
 			str_free(cmdstr);	
@@ -255,7 +291,7 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
-	if(fd_in > 0)
+	if(fd_in > 0) //close initrd file
 		close(fd_in);
 	str_free(cmdstr);	
 	free_history();

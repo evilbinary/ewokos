@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <sys/fbinfo.h>
-#include <graph/graph.h>
+#include <graph/graph_ex.h>
 
 
 #ifdef __cplusplus
@@ -18,11 +18,10 @@ typedef struct {
     void      (*splash)(graph_t* g);
 } fbd_t;
 
-extern int fbd_run(fbd_t* fbd,
-    const char* mnt_name,
-    uint32_t w,
-    uint32_t h,
-    uint32_t rotate);
+extern int fbd_run(fbd_t* fbd, const char* mnt_name,
+    uint32_t def_w,
+    uint32_t def_h,
+    int32_t def_rotate);
 
 #ifdef __cplusplus
 }

@@ -2,8 +2,9 @@
 #define XWM_HH
 
 #include <x/xwm.h>
-#include <graph/graph.h>
+#include <graph/graph_ex.h>
 #include <font/font.h>
+#include <sconf/sconf.h>
 
 namespace Ewok {
 
@@ -14,7 +15,6 @@ protected:
 	uint32_t frameW;
 
 	font_t font;
-	graph_t* bgImg;
 	uint32_t bgColor;
 	uint32_t fgColor;
 	uint32_t bgTopColor;
@@ -39,6 +39,7 @@ protected:
 	virtual void drawResize(graph_t* g, xinfo_t* info, grect_t* r, bool top);
 	virtual void drawFrame(graph_t* g, xinfo_t* info, bool top);
 	virtual void drawDragFrame(graph_t* g, grect_t* r);
+	virtual void loadConfig(sconf_t* sconf);
 public:
 	inline void __getWinSpace(int style, grect_t* xr, grect_t* wsr) {getWinSpace(style, xr, wsr);}
 	inline void __getClose(xinfo_t* info, grect_t* r) { getClose(info, r); }

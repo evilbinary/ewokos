@@ -9,7 +9,7 @@ static int write_nblock(int fd, const void* buf, uint32_t size) {
   if(vfs_get_by_fd(fd, &info) != 0)
     return -1;
   if(info.type == FS_TYPE_PIPE)
-    return vfs_write_pipe(&info, buf, size, 0);
+    return vfs_write_pipe(info.node, buf, size, 0);
   return vfs_write(fd, &info, buf, size);
 }
 
@@ -22,7 +22,7 @@ static int write_block(int fd, const void* buf, uint32_t size) {
 	int res = -1;
 	if(info.type == FS_TYPE_PIPE) {
 		while(1) {
-			res = vfs_write_pipe(&info, buf, size, true);
+			res = vfs_write_pipe(info.node, buf, size, true);
 			if(res >= 0 || errno != EAGAIN)
 				break;
 		}
@@ -37,7 +37,7 @@ static int write_block(int fd, const void* buf, uint32_t size) {
 		}
 
 		if(errno == EAGAIN)
-			proc_block(info.mount_pid, 0);
+			proc_block(info.mount_pid, RW_BLOCK_EVT);
 
 		if (res < 0) /* let user handle those erro id*/
 			break;

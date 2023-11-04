@@ -37,8 +37,8 @@
 #	define BROADCOM_2835
 #	define HCD_DESIGNWARE_20
 //#	define HCD_DESIGNWARE_BASE ((void*)0x20980000)
-#	define _RASPI_MMIO_BASE 0xc0000000
-#	define HCD_DESIGNWARE_BASE ((void*)(_RASPI_MMIO_BASE + 0x0980000))
+//#	define _RASPI_MMIO_BASE 0xc0000000
+#	define HCD_DESIGNWARE_BASE ((void*)(_v_mmio_base + 0x0980000))
 
 #elif defined TARGET_RPI2
 	// Compiling for the Raspberry Pi 2 (model B). 
@@ -50,8 +50,8 @@
 #	define ENDIAN_LITTLE
 #	define BROADCOM_2835
 #	define HCD_DESIGNWARE_20
-#	define _RASPI_MMIO_BASE 0xc0000000
-#	define HCD_DESIGNWARE_BASE ((void*)(_RASPI_MMIO_BASE + 0x0980000))
+//#	define _RASPI_MMIO_BASE 0xc0000000
+#	define HCD_DESIGNWARE_BASE ((void*)(_v_mmio_base + 0x0980000))
 #elif defined TARGET_NONE
 	// Compiling for no target architecture. This will rapidly run into errors.
 #elif defined TARGET_ERROR

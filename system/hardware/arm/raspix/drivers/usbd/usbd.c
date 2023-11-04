@@ -23,8 +23,8 @@ void LogPrint(const char* message, uint32_t messageLength) {
   klog("%s", message);
 }
 
-void usb_host_init(void) {
-  UsbInitialise();
+static void usb_host_init(uint32_t v_mmio_base) {
+  UsbInitialise(v_mmio_base);
   usleep(100000);
   UsbCheckForChange();
   usleep(100000);
@@ -63,7 +63,7 @@ static int usb_step(void* p) {
         _release_count = 2;
         _last_x = event.x;
         _last_y = event.y;
-        proc_wakeup(0);
+        proc_wakeup(RW_BLOCK_EVT);
 	}
     else if(_release_count > 0) {
         _release_count--;
@@ -73,18 +73,18 @@ static int usb_step(void* p) {
             _buf[2] = _last_y;
             //fprintf(stderr, "e:%d x:%d y:%d\n", _buf[0], _buf[1], _buf[2]);
             _hasData = 1;
-            proc_wakeup(0);
+            proc_wakeup(RW_BLOCK_EVT);
         }
     }
     usleep(15000);
 	return 0;
 }
 
-static int touch_read(int fd, int from_pid, fsinfo_t* info,
+static int touch_read(int fd, int from_pid, uint32_t node,
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)from_pid;
-	(void)info;
+	(void)node;
 	(void)offset;
 	(void)p;
 
@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
 	if(_mmio_base == 0)
 		return -1;
 
-	usb_host_init();
+	usb_host_init(_mmio_base);
 
 	const char* mnt_point = argc > 1 ? argv[1]: "/dev/touch0";
 

@@ -40,7 +40,7 @@ public:
         imgX = imgY = 0;
 		img_big = png_image_new(X::getResName("data/rokid.png"));	
 		img_small = png_image_new(X::getResName("data/rokid_small.png"));	
-		font_load("/user/system/fonts/system.ttf", 13, &font);
+		font_load(DEFAULT_SYSTEM_FONT, 13, &font, true);
 	}
 	
 	inline ~TestX() {
@@ -140,13 +140,13 @@ static void timer_handler(void) {
 int main(int argc, char* argv[]) {
 	(void)argc;
 	(void)argv;
-	xscreen_t scr;
+	grect_t desk;
 
 	X x;
-	x.screenInfo(scr, 0);
+	x.getDesktopSpace(desk, 0);
 
 	TestX xwin;
-	x.open(&scr, &xwin, 0, 0, "gtest", X_STYLE_NORMAL);
+	x.open(&desk, &xwin, 0, 0, "gtest", XWIN_STYLE_NORMAL);
 	xwin.setVisible(true);
 
 	/*_xwin = &xwin;

@@ -6,6 +6,7 @@ KERNEL_H = \
 	$(KERNEL_DIR)/include/interrupt.h \
 	$(KERNEL_DIR)/include/sysinfo.h \
 	$(KERNEL_DIR)/include/kevent.h \
+	$(KERNEL_DIR)/include/shmflag.h \
 	$(KERNEL_DIR)/include/procinfo.h
 
 kernel_heads:
@@ -28,7 +29,7 @@ sd:
 	sudo fuse-ext2 -o force,rw+ ${SD} build/tmp
 
 #cp dirs and files
-	sudo cp -r $(ROOT_DIR)/build/rootfs/* build/tmp
+	sudo cp -r $(ROOT_DIR)/build/$(HW)/* build/tmp
 
 #umount tmp
 	sudo umount build/tmp

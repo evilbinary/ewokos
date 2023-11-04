@@ -2,6 +2,7 @@
 #include <mm/kalloc.h>
 #include <mm/kmalloc.h>
 #include <mm/mmu.h>
+#include <shmflag.h>
 #include <kernel/kernel.h>
 #include <kernel/hw_info.h>
 #include <kernel/proc.h>
@@ -28,7 +29,7 @@ static share_mem_t* _shm_tail = NULL;
 
 void shm_init() {
 	//share memory base address at virtual address 1GB
-	shmem_tail = (uint32_t)ALIGN_UP(1*GB, PAGE_SIZE);
+	shmem_tail = (uint32_t)ALIGN_UP(SHM_BASE, PAGE_SIZE);
 	_shm_head = NULL;
 	_shm_tail = NULL;
 }
@@ -112,6 +113,9 @@ void* shm_alloc(uint32_t size, int32_t flag) {
 		}
 	}
 	else { // not found, need to expand pages for new block.
+		if((shmem_tail + size) >= (SHM_BASE + SHM_MAX_SIZE))
+			return -1;
+
 		i = shm_new();
 		if(i == NULL) {
 			return -1;
@@ -203,7 +207,7 @@ static share_mem_t* free_item(share_mem_t* it) {
 }*/
 
 static int32_t check_owner(proc_t* proc, share_mem_t* it) {
-	if(it->flag != 0)  //1 for public, 0 for family only
+	if(it->flag != SHM_FAMILY)  //1 for public, 0 for family only
 		return 0;
 
 	while(proc != NULL) {
@@ -238,6 +242,13 @@ void* shm_proc_map(int32_t pid, void* p) {
 		return NULL;
 
 	uint32_t i;
+	//check if mapped , keep it and return
+	for (i = 0; i < SHM_MAX; i++) {
+		if(proc->space->shms[i] == (uint32_t)p)
+			return p;
+	}
+
+	//do real map
 	for (i = 0; i < SHM_MAX; i++) {
 		if(proc->space->shms[i] == 0) {
 			proc->space->shms[i] = (uint32_t)p;
@@ -247,13 +258,19 @@ void* shm_proc_map(int32_t pid, void* p) {
 	if(i >= SHM_MAX)
 		return NULL;
 
+	uint32_t access;
+	if(it->flag == SHM_RDONLY && pid != it->owner)
+		access = AP_RW_R;
+	else
+		access = AP_RW_RW;
+
 	uint32_t addr = it->addr;
 	for (i = 0; i < it->pages; i++) {
 		uint32_t physical_addr = resolve_phy_address(_kernel_vm, addr);
 		map_page(proc->space->vm,
 				addr,
 				physical_addr,
-				AP_RW_RW, PTE_ATTR_WRBACK);
+				access, PTE_ATTR_WRBACK);
 		addr += PAGE_SIZE;
 	}
 	flush_tlb();

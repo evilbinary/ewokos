@@ -4,6 +4,9 @@
 #include <mm/mmu.h>
 #include <kstring.h>
 
+#define FB_DEF_W 1600
+#define FB_DEF_H 600
+
 static fbinfo_t _fb_info;
 int32_t vpb_fb_init(uint32_t w, uint32_t h, uint32_t dep) {
 	memset(&_fb_info, 0, sizeof(fbinfo_t));
@@ -50,14 +53,14 @@ int32_t vpb_fb_init(uint32_t w, uint32_t h, uint32_t dep) {
 	return 0;
 }
 
-int32_t fb_init(uint32_t w, uint32_t h, fbinfo_t* fbinfo) {
-	if(vpb_fb_init(w, h, 32) != 0)
+int32_t fb_init_bsp(uint32_t w, uint32_t h, uint8_t dep, fbinfo_t* fbinfo) {
+	if(vpb_fb_init(w, h, dep) != 0)
 		return -1;
 	memcpy(fbinfo, &_fb_info, sizeof(fbinfo_t));
 	return 0;
 }
 
-void fb_flush32(uint32_t* g32, uint32_t w, uint32_t h) {
+void fb_flush32_bsp(uint32_t* g32, uint32_t w, uint32_t h) {
 	(void)g32;
 	(void)w;
 	(void)h;

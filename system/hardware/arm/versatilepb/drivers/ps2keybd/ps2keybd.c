@@ -98,14 +98,14 @@ static int32_t keyb_handle(uint8_t scode) {
 
 static charbuf_t _buffer;
 
-static int keyb_read(int fd, int from_pid, fsinfo_t* info, 
+static int keyb_read(int fd, int from_pid, uint32_t node, 
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)from_pid;
 	(void)offset;
 	(void)p;
 	(void)size;
-	(void)info;
+	(void)node;
 
 	char c;
 	int res = charbuf_pop(&_buffer, &c);
@@ -123,7 +123,7 @@ static int loop(void* p) {
 	char c = keyb_handle(key_scode);
 	if(c != 0) {
 		charbuf_push(&_buffer, c, true);
-		proc_wakeup(0);
+		proc_wakeup(RW_BLOCK_EVT);
 	}
 	usleep(10000);
 	return 0;

@@ -13,8 +13,8 @@ void XWM::getWinSpace(int style, grect_t* xr, grect_t* winr) {
 	winr->x = xr->x;
 	winr->w = xr->w;
 
-	if((style & X_STYLE_NO_TITLE) == 0 &&
-			(style & X_STYLE_NO_FRAME) == 0) {
+	if((style & XWIN_STYLE_NO_TITLE) == 0 &&
+			(style & XWIN_STYLE_NO_FRAME) == 0) {
 		winr->y = xr->y - titleH;
 		winr->h = xr->h + titleH;
 	}
@@ -25,14 +25,9 @@ static void get_win_space(int style, grect_t* xr, grect_t* winr, void* p) {
 }
 
 void XWM::getTitle(xinfo_t* info, grect_t* rect) {
-	rect->x = info->winr.x + titleH;
-	rect->y = info->winr.y;// - titleH;
-
-	if((info->style & X_STYLE_NO_RESIZE) == 0)
-		rect->w = info->winr.w - titleH*3;
-	else
-		rect->w = info->winr.w - titleH;
-
+	rect->x = info->winr.x;
+	rect->y = info->winr.y;
+	rect->w = info->winr.w;
 	rect->h = titleH;
 }
 
@@ -41,7 +36,7 @@ static void get_title(xinfo_t* info, grect_t* rect, void* p) {
 }
 
 void XWM::getMin(xinfo_t* info, grect_t* rect) {
-	rect->x = info->winr.x+info->winr.w-titleH*2;
+	rect->x = info->winr.x + info->winr.w - titleH*2;
 	rect->y = info->winr.y;// - titleH;
 	rect->w = titleH;
 	rect->h = titleH;
@@ -52,7 +47,7 @@ static void get_min(xinfo_t* info, grect_t* rect, void* p) {
 }
 
 void XWM::getMax(xinfo_t* info, grect_t* rect) {
-	rect->x = info->winr.x+info->winr.w-titleH*1;
+	rect->x = info->winr.x + info->winr.w- titleH;
 	rect->y = info->winr.y;// - titleH;
 	rect->w = titleH;
 	rect->h = titleH;
@@ -74,10 +69,10 @@ static void get_close(xinfo_t* info, grect_t* rect, void* p) {
 }
 
 void XWM::getResize(xinfo_t* info, grect_t* rect) {
-	rect->x = info->wsr.x + info-> wsr.w - 16;
-	rect->y = info->wsr.y + info-> wsr.h - 16;
-	rect->w = 16 + frameW;
-	rect->h = 16 + frameW;
+	rect->x = info->wsr.x + info-> wsr.w - 20;
+	rect->y = info->wsr.y + info-> wsr.h - 20;
+	rect->w = 20 + frameW - 1;
+	rect->h = 20 + frameW - 1;
 }
 
 static void get_resize(xinfo_t* info, grect_t* rect, void* p) {
@@ -121,7 +116,7 @@ void XWM::drawFrame(graph_t* g, xinfo_t* info, bool top) {
 	int h = info->wsr.h;
 	//int h = 0;
 
-	if((info->style & X_STYLE_NO_TITLE) == 0) {
+	if((info->style & XWIN_STYLE_NO_TITLE) == 0) {
 		h += titleH;
 		//h = titleH;
 		y -= titleH;
@@ -171,8 +166,8 @@ void XWM::drawMax(graph_t* g, xinfo_t* info, grect_t* r, bool top) {
 	getColor(&fg, &bg, top);
 
 	graph_fill(g, r->x, r->y, r->w, r->h, bg);
+	graph_box(g, r->x+4, r->y+4, r->w-12, r->h-12, fg);
 	graph_box(g, r->x+4, r->y+4, r->w-8, r->h-8, fg);
-	graph_box(g, r->x+4, r->y+4, r->w-10, r->h-10, fg);
 }
 
 static void draw_max(graph_t* g, xinfo_t* info, grect_t* r, bool top, void* p) {
@@ -200,7 +195,7 @@ void XWM::drawResize(graph_t* g, xinfo_t* info, grect_t* r, bool top) {
 	getColor(&fg, &bg, top);
 
 	graph_fill(g, r->x, r->y, r->w, r->h, bg);
-	graph_box(g, r->x+2, r->y+2, r->w-4, r->h-4, fg);
+	graph_box(g, r->x+3, r->y+3, r->w-6, r->h-6, fg);
 	graph_box(g, r->x, r->y, r->w, r->h, fg);
 }
 
@@ -239,16 +234,8 @@ void XWM::getColor(uint32_t *fg, uint32_t* bg, bool top) {
 	}
 }
 
-void XWM::readConfig(const char* fname) {
-	sconf_t *sconf = sconf_load(fname);	
-	if(sconf == NULL)
-		return;
-
-	const char* v = sconf_get(sconf, "bg_image");
-	if(v[0] != 0) 
-		bgImg = png_image_new(v);
-
-	v = sconf_get(sconf, "fg_color");
+void XWM::loadConfig(sconf_t* sconf) {
+	const char* v = sconf_get(sconf, "fg_color");
 	if(v[0] != 0) 
 		fgColor = atoi_base(v, 16);
 
@@ -285,12 +272,18 @@ void XWM::readConfig(const char* fname) {
 	if(v[0] != 0) 
 		font_size = atoi(v);
 
+	const char* fname = DEFAULT_SYSTEM_FONT;
 	v = sconf_get(sconf, "font");
 	if(v[0] != 0) 
- 		font_load(v, font_size, &font);
-	else
- 		font_load("/user/system/fonts/system.ttf", font_size, &font);
+ 		fname = v;
+ 	font_load(fname, font_size, &font, true);
+}
 
+void XWM::readConfig(const char* fname) {
+	sconf_t *sconf = sconf_load(fname);	
+	if(sconf == NULL)
+		return;
+	loadConfig(sconf);
 	sconf_free(sconf);
 }
 
@@ -298,7 +291,6 @@ XWM::XWM(void) {
 	font_init();
 	memset(&xwm, 0, sizeof(xwm_t));
 
-	bgImg = NULL;
 	desktopBGColor = 0xff555588;
 	desktopFGColor = 0xff8888aa;
 	bgColor = 0xff666666;

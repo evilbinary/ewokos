@@ -104,11 +104,11 @@ int miyoo_gpio_read(int pin)
 }
 
 
-static int joystick_read(int fd, int from_pid, fsinfo_t* info,
+static int joystick_read(int fd, int from_pid, uint32_t node,
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)from_pid;
-	(void)info;
+	(void)node;
 	(void)offset;
 	(void)size;
 	(void)p;
@@ -138,12 +138,12 @@ static void init_gpio(void) {
 int main(int argc, char** argv) {
 	 _mmio_base = mmio_map();
 
-	const char* mnt_point = argc > 1 ? argv[1]: "/dev/joykeyb";
+	const char* mnt_point = argc > 1 ? argv[1]: "/dev/joystick";
 	init_gpio();
 
 	vdevice_t dev;
 	memset(&dev, 0, sizeof(vdevice_t));
-	strcpy(dev.name, "joykeyb");
+	strcpy(dev.name, "joystick");
 	dev.read = joystick_read;
 	device_run(&dev, mnt_point, FS_TYPE_CHAR);
 	return 0;

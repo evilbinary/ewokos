@@ -16,8 +16,17 @@
 #define KERNEL_BASE                    0x80000000 //=2G virtual address start base.
 #define INTERRUPT_VECTOR_BASE          0xffff0000
 
-#define MMIO_BASE                      (KERNEL_BASE + 1*GB)
+#define MAX_MEM_SIZE                   (1*GB + 512*MB) //max usable memory for 32bits OS
+//#define MAX_MEM_SIZE                   (1*GB) //max usable memory for 32bits OS
+
+#define MMIO_BASE                      (KERNEL_BASE + MAX_MEM_SIZE)
 #define USER_STACK_TOP                 (KERNEL_BASE - PAGE_SIZE)
+
+#define USER_STACK_MAX                 (128*MB)
+#define USER_STACK_BOTTOM              (USER_STACK_TOP - USER_STACK_MAX)
+
+#define SHM_MAX_SIZE                   (128*MB)
+#define SHM_BASE                       (USER_STACK_BOTTOM - SHM_MAX_SIZE)
 
 #define KERNEL_IMAGE_END               ALIGN_UP((uint32_t)_kernel_end, PAGE_DIR_SIZE)
 

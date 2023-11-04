@@ -84,10 +84,6 @@ void     graph_scale_tof(graph_t* src, graph_t* dst, float scale);
 graph_t* graph_scalef(graph_t* g, float scale);
 
 void     graph_box(graph_t* g, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color);
-void     graph_get_3d_color(uint32_t base, uint32_t *dark, uint32_t *bright);
-void     graph_box_3d(graph_t* g, int x, int y, int w, int h, uint32_t bright_color, uint32_t dark_color);
-void     graph_frame(graph_t* g, int x, int y, int w, int h, int width, uint32_t base_color, bool rev);
-void     graph_fill_3d(graph_t* g, int x, int y, int w, int h, uint32_t color, bool rev);
 void     graph_fill(graph_t* g, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color);
 
 void     graph_line(graph_t* g, int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t color);
@@ -107,14 +103,6 @@ void     graph_blt(graph_t* src, int32_t sx, int32_t sy, int32_t sw, int32_t sh,
 void     graph_blt_alpha(graph_t* src, int32_t sx, int32_t sy, int32_t sw, int32_t sh,
 			graph_t* dst, int32_t dx, int32_t dy, int32_t dw, int32_t dh, uint8_t alpha);
 
-#ifdef NEON_ENABLE
-void     graph_fill_neon(graph_t* g, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color);
-void     graph_blt_neon(graph_t* src, int32_t sx, int32_t sy, int32_t sw, int32_t sh,
-			graph_t* dst, int32_t dx, int32_t dy, int32_t dw, int32_t dh);
-void     graph_blt_alpha_neon(graph_t* src, int32_t sx, int32_t sy, int32_t sw, int32_t sh,
-			graph_t* dst, int32_t dx, int32_t dy, int32_t dw, int32_t dh, uint8_t alpha);	
-#endif
-
 void     graph_fill_cpu(graph_t* g, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color);
 void     graph_blt_cpu(graph_t* src, int32_t sx, int32_t sy, int32_t sw, int32_t sh,
 			graph_t* dst, int32_t dx, int32_t dy, int32_t dw, int32_t dh);
@@ -128,6 +116,8 @@ graph_t* graph_from_fb(int fd, int *dma_id);
 void      bitmap_free(bitmap_t* b);
 bitmap_t* graph_to_bitmap(graph_t* g);
 graph_t*  graph_from_bitmap(bitmap_t* b, uint32_t color);
+
+bool     graph_2d_boosted(void);
 
 #ifdef __cplusplus
 }

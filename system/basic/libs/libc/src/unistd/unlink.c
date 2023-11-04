@@ -4,7 +4,7 @@
 
 int unlink(const char* fname) {
 	fsinfo_t info;
-	if(vfs_get(fname, &info) != 0)
+	if(vfs_get_by_name(fname, &info) != 0)
 		return -1;
 	if(info.type != FS_TYPE_FILE) 
 		return -1;
@@ -18,7 +18,7 @@ int unlink(const char* fname) {
 	PF->init(&out);
 
 	PF->init(&in)->
-		add(&in, &info, sizeof(fsinfo_t))->
+		addi(&in, info.node)->
 		adds(&in, fname);
 
 	ipc_call(info.mount_pid, FS_CMD_UNLINK, &in, &out);
@@ -26,6 +26,6 @@ int unlink(const char* fname) {
 	int res = proto_read_int(&out);
 	PF->clear(&out);
 	if(res == 0)
-		return vfs_del(&info);
+		return vfs_del_node(info.node);
 	return -1;
 }

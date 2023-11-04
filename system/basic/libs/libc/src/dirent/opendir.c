@@ -5,11 +5,11 @@
 
 DIR* opendir(const char* name) {
 	fsinfo_t info;
-	if(vfs_get(name, &info) != 0)
+	if(vfs_get_by_name(name, &info) != 0)
 		return NULL;
 	
 	uint32_t num = 0;
-	fsinfo_t* kids = vfs_kids(&info, &num);
+	fsinfo_t* kids = vfs_kids(info.node, &num);
 	if(kids == NULL || num == 0)
 		return NULL;
 

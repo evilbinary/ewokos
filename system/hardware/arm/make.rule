@@ -43,12 +43,7 @@ CXXFLAGS = -marm \
         -fno-rtti \
         -fno-exceptions \
         -std=c++11
-
-ifeq ($(NEON),yes)
-CFLAGS += -mfpu=neon-vfpv4 -DNEON_ENABLE
-CXXFLAGS += -mfpu=neon-vfpv4 -DNEON_ENABLE
-endif
-
+        
 #CFLAGS +=  -g
 CFLAGS +=  -O2
 #CXXFLAGS +=  -g

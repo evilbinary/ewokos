@@ -128,8 +128,7 @@ public:
 	bool readConfig(const char* fname) {
 		sconf_t *conf = sconf_load(fname);	
 		if(conf == NULL){
-			font_load("/user/system/fonts/system.ttf", 14, &font);
-			printf("%08x\n", font);
+			font_load(DEFAULT_SYSTEM_FONT, 14, &font, true);
 			return false;
 		}
 
@@ -140,8 +139,8 @@ public:
 
 		v = sconf_get(conf, "font");
 		if(v[0] == 0)
-			v = "/user/system/fonts/system.ttf";
-		font_load(v, font_size, &font);
+			v = DEFAULT_SYSTEM_FONT;
+		font_load(v, font_size, &font, true);
 
 		v = sconf_get(conf, "bg_color");
 		if(v[0] != 0)
@@ -168,7 +167,7 @@ int main(int argc, char* argv[]) {
 	(void)argv;
 
 	Book xwin;
-	xwin.readConfig(x_get_theme_fname("/user/x/themes", "book", "theme.conf"));
+	xwin.readConfig(x_get_theme_fname(X_THEME_ROOT, "book", "theme.conf"));
 	if(argc == 2){
 		xwin.openBook(argv[1]);
 	}else{
@@ -180,7 +179,7 @@ int main(int argc, char* argv[]) {
 			300,
 			200,
 			"book",
-			X_STYLE_NORMAL);
+			XWIN_STYLE_NORMAL);
 
 	xwin.setVisible(true);
 	x.run(loop, &xwin);

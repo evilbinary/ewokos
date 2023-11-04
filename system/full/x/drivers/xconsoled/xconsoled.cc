@@ -68,6 +68,7 @@ public:
 
 	bool readConfig(const char* fname) {
 		memset(&conf, 0, sizeof(conf_t));
+		klog("%s\n", fname);
 		sconf_t *sconf = sconf_load(fname);	
 		if(sconf == NULL)
 			return false;
@@ -96,9 +97,9 @@ public:
 
 		v = sconf_get(sconf, "font");
 		if(v[0] == 0) 
-			v = "/user/system/fonts/system.ttf";
+			v = DEFAULT_SYSTEM_FONT;
 		
-		font_load(v, font_size, &console.textview.font);
+		font_load(v, font_size, &console.textview.font, true);
 
 		v = sconf_get(sconf, "height");
 		if(v[0] != 0) 
@@ -129,14 +130,14 @@ protected:
 
 static int console_write(int fd, 
 		int from_pid,
-		fsinfo_t* info,
+		uint32_t node,
 		const void* buf,
 		int size,
 		int offset,
 		void* p) {
 	(void)fd;
 	(void)from_pid;
-	(void)info;
+	(void)node;
 	(void)offset;
 
 	XConsoled *xwin = (XConsoled*)p;
@@ -159,11 +160,11 @@ int main(int argc, char** argv) {
 	const char* mnt_point = argc > 1 ? argv[1]: "/dev/xconsole";
 
 	XConsoled xwin;
-	xwin.readConfig(x_get_theme_fname("/etc/x/themes", "", "xconsoled.conf"));
+	xwin.readConfig(x_get_theme_fname(X_THEME_ROOT, "xconsoled", "theme.conf"));
 
 	X x;
 	xscreen_t scr;
- 	x.screenInfo(scr, 0);
+ 	x.getScreenInfo(scr, 0);
 
 	uint32_t w = xwin.getWidth();
 	uint32_t h = xwin.getHeight();
@@ -172,7 +173,7 @@ int main(int argc, char** argv) {
 	h = h==0 ? scr.size.h:h;
 
 	x.open(&xwin, (scr.size.w-w)/2, scr.size.h-h, w, h, "xconsoled",
-			X_STYLE_NO_TITLE | X_STYLE_NO_FOCUS | X_STYLE_SYSTOP | X_STYLE_LAZY);
+			XWIN_STYLE_NO_TITLE | XWIN_STYLE_NO_FOCUS | XWIN_STYLE_SYSTOP | XWIN_STYLE_LAZY);
 	xwin.setVisible(false);
 	xwin.setAlpha(true);
 

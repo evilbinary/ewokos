@@ -146,11 +146,14 @@ target("system")
         if not os.exists(rootfs_dir) then
             os.mkdir(rootfs_dir)
             os.run("cp -rf %s/full/data %s", system_dir, rootfs_dir)
-            os.run("cp -rf %s/basic/etc %s", system_dir, rootfs_dir)
-            os.run("cp -rf %s/full/etc %s", system_dir, rootfs_dir)
-            os.run("mkdir -p %s/dev", rootfs_dir)
+			os.run("mkdir -p %s/dev", rootfs_dir)
             os.run("mkdir -p %s/home/root", rootfs_dir)
         end
+		os.run("cp -rf %s/basic/etc %s", system_dir, rootfs_dir)
+        os.run("cp -rf %s/full/etc %s", system_dir, rootfs_dir)
+        os.run("cp -rf %s/full/usr %s", system_dir, rootfs_dir)
+        os.run("cp -rf %s/full/usr/x/themes/solaris %s/usr/x/themes/default", system_dir, rootfs_dir)
+        
     end)
 
     on_build(function (target)
@@ -173,6 +176,7 @@ includes("extra/**/xmake.lua")
 
 if is_plat("raspix","raspi1", "raspi2", "raspi3", "raspi4") then
     set_arch("")
+	add_defines("GRAPH_2D_BOOST")
     rootfs_dir =  os.scriptdir().."/build/raspix/rootfs/" 
     includes("hardware/arm/raspix/xmake.lua")
 	includes("hardware/3rd/raspix/xmake.lua")
