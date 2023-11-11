@@ -9,8 +9,9 @@
 #include <sys/proc.h>
 #include <font/font.h>
 #include <dirent.h>
+#include <Widget/ListView.h>
 
-#define ITEM_MAX 128
+#define ITEM_MAX 16
 using namespace Ewok;
 
 typedef struct {
@@ -22,39 +23,20 @@ typedef struct {
 	uint32_t runPidUUID;
 } item_t;
 
-typedef struct {
-	int icon_size;
-	int rows;
-	int cols;
-	int marginH;
-	int marginV;
-	int num;
+class LauncherView: public ListView {
 	item_t items[ITEM_MAX];	
-} items_t;
-
-class Launcher: public XWin {
-	const uint8_t POS_BOTTOM = 0;
-	const uint8_t POS_TOP = 1;
-	const uint8_t POS_LEFT = 2;
-	const uint8_t POS_RIGHT = 3;
-
-	items_t items;
-	int selected;
-	int start;
-	bool focused;
-	font_t font;
+	uint32_t itemNum;
+	font_t* font;
 	uint32_t titleColor;
 	uint32_t bgColor;
 	uint32_t selectedColor;
 	uint32_t fontSize;
+	uint32_t iconSize;
 	int32_t titleMargin;
-	int32_t height;
-	int32_t width;
-	uint8_t position;
 
 	void drawRunning(graph_t* g, int x, int y) {
-		uint32_t mV = items.marginV/2;
-		uint32_t mH = items.marginH/2;
+		uint32_t mV = itemsInfo.marginV/2;
+		uint32_t mH = itemsInfo.marginH/2;
 		uint32_t r = mV>mH ? mH:mV;
 		graph_fill_circle(g, x+2, y+2, r, 0x88000000);
 		graph_fill_circle(g, x, y, r-1, 0xff000000);
@@ -62,9 +44,9 @@ class Launcher: public XWin {
 	}
 
 	void drawIcon(graph_t* g, int at, int x, int y, int w, int h) {
-		item_t* item = &items.items[at];
+		item_t* item = &items[at];
 		const char* icon = item->icon->cstr;
-		int icon_size = items.icon_size < w ? items.icon_size : w;
+		int icon_size = iconSize < w ? iconSize : w;
 		graph_t* img = item->iconImg;
 		if(img == NULL) {
 			graph_t* i = png_image_new(icon);
@@ -80,7 +62,7 @@ class Launcher: public XWin {
 		}
 
 		int dx = (w - img->w)/2;
-		int dy = (h - (int)(items.icon_size + titleMargin + fontSize)) / 2;
+		int dy = (h - (int)(iconSize + titleMargin + fontSize)) / 2;
 		graph_blt_alpha(img, 0, 0, img->w, img->h,
 				g, x+dx, y+dy, img->w, img->h, 0xff);
 		
@@ -89,13 +71,13 @@ class Launcher: public XWin {
 	}
 
 	void drawTitle(graph_t* g, int at, int x, int y, int w, int h) {
-		const char* title = items.items[at].app->cstr;
+		const char* title = items[at].app->cstr;
 		uint32_t tw, th;
-		font_text_size(title, &font, &tw, &th);
+		font_text_size(title, font, &tw, &th);
 		x += (w - (int32_t)tw)/2;
-		y += (h - (int)(items.icon_size + titleMargin + (int32_t)th)) /2 +
-				items.icon_size + titleMargin;
-		graph_draw_text_font(g, x, y, title, &font, titleColor);
+		y += (h - (int)(iconSize + titleMargin + (int32_t)th)) /2 +
+				iconSize + titleMargin;
+		graph_draw_text_font(g, x, y, title, font, titleColor);
 	}
 
 	void runProc(item_t* item) {
@@ -116,232 +98,57 @@ class Launcher: public XWin {
 	}
 
 protected:
-	void drawItem(graph_t* g, int at, int x, int y, int w, int h) {
-		graph_set_clip(g, x - items.marginH / 2, y - items.marginV / 2,
-				w+items.marginH, h+items.marginV);
+	void onClick(uint32_t at) {
+		item_t* item = &items[at];
+		runProc(item);
+	}
 
-		if (selected == at && focused) {
-			graph_fill_round(g, x - items.marginH / 2, y - items.marginV / 2,
-							w+items.marginH, h+items.marginV,
+	void drawItem(graph_t* g, int at, int x, int y, int w, int h) {
+		if (selected == at) {
+			graph_fill_round(g, x, y,
+							w, h,
 							8, selectedColor);
 		}
-		drawIcon(g, at, x, y, w, h);
+		drawIcon(g, at, x , y, w, h);
 		drawTitle(g, at, x, y, w, h);
 	}
 
-	void onRepaint(graph_t* g) {
+	uint32_t getItemNum() {
+		return itemNum;
+	}
+
+	void drawBG(graph_t* g, const gpos_t& pos) {
 		graph_clear(g, bgColor);
-		if(color_a(bgColor) != 0xff)
-			setAlpha(true);
-		else
-			setAlpha(false);
-
-		int i, j, itemH, itemW;
-		//cols = g->w / items.item_size;
-		//rows = items.num / cols;
-		itemH = (g->h - items.marginV) / items.rows;
-		itemW = (g->w - items.marginH) / items.cols;
-		//if((items.num % cols) != 0)
-		//	rows++;
-			
-		if(position == POS_TOP || position == POS_BOTTOM) {
-			for(j=0; j<items.rows; j++) {
-				for(i=0; i<items.cols; i++) {
-					int at = j*items.cols + i + start;
-					if(at >= items.num)
-						return;
-					int x = i*itemW + items.marginH;
-					int y = j*itemH + items.marginV;
-					drawItem(g, at, x, y, itemW-items.marginH, itemH-items.marginV);
-				}
-			}
-		}
-		else {
-			for(i=0; i<items.cols; i++) {
-				for(j=0; j<items.rows; j++) {
-					int at = i*items.rows + j + start;
-					if(at >= items.num)
-						return;
-					int x;
-					if(position == POS_RIGHT)
-						x  = (items.cols-i-1)*itemW + items.marginH;
-					else
-						x  = i*itemW + items.marginH;
-					int y = j*itemH + items.marginV;
-					drawItem(g, at, x, y, itemW-items.marginH, itemH-items.marginV);
-				}
-			}
-		}
-	}
-
-	void onIM(xevent_t* ev) {
-		int key = ev->value.im.value;
-		if(ev->state == XIM_STATE_PRESS) {
-			if(position == POS_TOP || position == POS_BOTTOM) {
-				if(key == KEY_LEFT)
-					selected--;
-				else if(key == KEY_RIGHT)
-					selected++;
-				else if(key == KEY_UP)
-					selected -= items.cols;
-				else if(key == KEY_DOWN)
-					selected += items.cols;
-				else
-					return;
-			}
-			else if(position == POS_LEFT) {
-				if(key == KEY_LEFT)
-					selected -= items.rows;
-				else if(key == KEY_RIGHT)
-					selected += items.rows;
-				else if(key == KEY_UP)
-					selected--;
-				else if(key == KEY_DOWN)
-					selected++;
-				else
-					return;
-			}
-			else {
-				if(key == KEY_LEFT)
-					selected += items.rows;
-				else if(key == KEY_RIGHT)
-					selected -= items.rows;
-				else if(key == KEY_UP)
-					selected--;
-				else if(key == KEY_DOWN)
-					selected++;
-				else
-					return;
-			}
-		}
-		else {//XIM_STATE_RELEASE
-			if(key == KEY_ENTER || key == KEY_BUTTON_START || key == KEY_BUTTON_A) {
-				runProc(&items.items[selected]);
-			}
-			return;
-		}
-
-		if(selected >= (items.num-1))
-			selected = items.num-1;
-		if(selected < 0)
-			selected = 0;
-		
-		if(selected < start) {
-			start -= items.cols*items.rows;
-			if(start < 0)
-				start = 0;
-		}
-		else if((selected - start) >= items.cols*items.rows) 
-			start += items.cols*items.rows;
-		repaint();
-	}
-
-	void onMouse(xevent_t* ev) {
-		xinfo_t xinfo;
-		getInfo(xinfo);
-
-		int itemW = xinfo.wsr.w / items.cols;
-		int itemH = xinfo.wsr.h / items.rows;
-		int col = (ev->value.mouse.x - xinfo.wsr.x) / itemW;
-		int row = (ev->value.mouse.y - xinfo.wsr.y) / itemH;
-		int at;
-		if(position == POS_TOP || position == POS_BOTTOM) 
-			at = row*items.cols + col + start;
-		else if(position == POS_LEFT) 
-			at = col*items.rows + row + start;
-		else
-			at = (items.cols-col-1)*items.rows + row + start;
-		if(at >= items.num)
-			return;
-
-		if(ev->state == XEVT_MOUSE_DOWN) {
-			if(selected != at) {
-				selected = at;
-				repaint();
-			}
-		}
-		else if(ev->state == XEVT_MOUSE_CLICK) {
-			runProc(&items.items[at]);
-			return;
-		}
-	}
-
-	void onEvent(xevent_t* ev) {
-		if(ev->type == XEVT_MOUSE) {
-			onMouse(ev);
-		}
-		else if(ev->type == XEVT_IM) {
-			onIM(ev);
-		}
-	}
-	
-	void onFocus(void) {
-		focused = true;
-		repaint();
-	}
-
-	void onUnfocus(void) {
-		focused = false;
-		repaint();
-	}
-
-	void onReorg(void) {
-		grect_t desk;
-		X::getDesktopSpace(desk, 0);
-		layout(desk);
-		gpos_t pos = getPos(desk);
-		moveTo(pos.x, pos.y);
-		resizeTo(width, height);
 	}
 
 public:
-	inline Launcher() {
-		height = 0;
+	inline LauncherView() {
+		font = NULL;
+		itemNum = 0;
 		titleMargin = 2;
-		selected = 0;
-		start = 0;
-		focused = true;
-		memset(&items, 0, sizeof(items_t));
+		for(int i=0; i<ITEM_MAX; i++)
+			memset(&items[i], 0, sizeof(item_t));
 	}
 
-	inline ~Launcher() {
-		for(int i=0; i<items.num; i++) {
-			str_free(items.items[i].app);
-			str_free(items.items[i].fname);
-			str_free(items.items[i].icon);
-			if(items.items[i].iconImg)
-				graph_free(items.items[i].iconImg);
+	inline ~LauncherView() {
+		for(int i=0; i<itemNum; i++) {
+			str_free(items[i].app);
+			str_free(items[i].fname);
+			str_free(items[i].icon);
+			if(items[i].iconImg)
+				graph_free(items[i].iconImg);
 		}
-		if(font.id >= 0)
-			font_close(&font);
-	}
-
-	void checkProc(void) {
-		bool doRepaint = false;
-		for(int i=0; i<items.num; i++) {
-			item_t* item = &items.items[i];
-
-			if(item->runPid > 0)  {
-				if(proc_check_uuid(item->runPid, item->runPidUUID) != item->runPidUUID) {
-					item->runPid = 0;
-					doRepaint = true;
-				}
-			}
-		}
-		if(doRepaint) {
-			repaint();
-		}
+		if(font != NULL)
+			font_free(font);
 	}
 
 	bool readConfig(const char* fname) {
-		items.marginH = 6;
-		items.marginV = 2;
-		items.icon_size = 64;
+		itemsInfo.marginH = 6;
+		itemsInfo.marginV = 2;
+		iconSize = 64;
 		titleColor = 0xffffffff;
 		bgColor = 0xff000000;
 		selectedColor = 0x88444444;
-		height = 0;
-		width = 0;
 		fontSize = 14;
 		position = POS_BOTTOM;
 
@@ -350,7 +157,7 @@ public:
 			return false;
 		const char* v = sconf_get(conf, "icon_size");
 		if(v[0] != 0)
-			items.icon_size = atoi(v);
+			iconSize = atoi(v);
 
 		v = sconf_get(conf, "position");
 		if(v[0] == 'b')
@@ -364,11 +171,11 @@ public:
 
 		v = sconf_get(conf, "marginH");
 		if(v[0] != 0)
-			items.marginH = atoi(v);
+			itemsInfo.marginH = atoi(v);
 
 		v = sconf_get(conf, "marginV");
 		if(v[0] != 0)
-			items.marginV = atoi(v);
+			itemsInfo.marginV = atoi(v);
 
 		v = sconf_get(conf, "font_size");
 		if(v[0] != 0)
@@ -377,7 +184,7 @@ public:
 		v = sconf_get(conf, "font");
 		if(v[0] == 0)
 			v = DEFAULT_SYSTEM_FONT;
-		font_load(v, fontSize, &font, true);
+		font = font_new(v, fontSize, true);
 
 		v = sconf_get(conf, "title_color");
 		if(v[0] != 0)
@@ -390,38 +197,11 @@ public:
 		v = sconf_get(conf, "icon_selected_color");
 		if(v[0] != 0)
 			selectedColor = atoi_base(v, 16);
-
 		sconf_free(conf);
+
+		itemsInfo.itemSize.h = fontSize + iconSize + titleMargin;
+		itemsInfo.itemSize.w = iconSize;
 		return true;
-	}
-
-	inline uint32_t getWidth(void) {
-		return width;
-	}
-
-	inline uint32_t getHeight(void) {
-		return height;
-	}
-
-	inline gpos_t getPos(const grect_t& scr) {
-		gpos_t pos;
-		if(position == POS_BOTTOM) {
-			pos.x = scr.x + (scr.w-width)/2;
-			pos.y = scr.y + scr.h - height;
-		}
-		else if(position == POS_TOP) {
-			pos.x = scr.x;
-			pos.y = scr.y;
-		}
-		else if(position == POS_LEFT) {
-			pos.x = scr.x;
-			pos.y = scr.y;
-		}
-		else if(position == POS_RIGHT) {
-			pos.x = scr.x + scr.w - width;
-			pos.y = scr.y;
-		}
-		return pos;
 	}
 
 	str_t* getIconFname(const char* appName) {
@@ -453,50 +233,72 @@ public:
 
 			if(it->d_name[0] == '.')
 				continue;
-			items.items[i].app = str_new(it->d_name);
+			items[i].app = str_new(it->d_name);
 
-			items.items[i].fname = str_new("/apps/");
-			str_add(items.items[i].fname, it->d_name);
-			str_add(items.items[i].fname, "/");
-			str_add(items.items[i].fname, it->d_name);
+			items[i].fname = str_new("/apps/");
+			str_add(items[i].fname, it->d_name);
+			str_add(items[i].fname, "/");
+			str_add(items[i].fname, it->d_name);
 
-			items.items[i].icon = getIconFname(it->d_name);
+			items[i].icon = getIconFname(it->d_name);
 			i++;
 		}
-		items.num = i;
+		itemNum = i;
 		closedir(dirp);
 		return true;
 	}
 
-	void layout(const grect_t& scr) {
-		if(position == POS_TOP || position == POS_BOTTOM) {
-			int max = (scr.w - items.marginH) / (items.icon_size + items.marginH);
-			if(items.num > max)
-				items.cols = max;
-			else
-				items.cols = items.num;
-			if(items.cols > 0)
-				items.rows = items.num / items.cols;
-			if((items.cols*items.rows) != items.num)
-				items.rows++;
+	bool checkProc(void) {
+		bool doRepaint = false;
+		for(int i=0; i<itemNum; i++) {
+			item_t* item = &items[i];
+			if(item->runPid > 0)  {
+				if(proc_check_uuid(item->runPid, item->runPidUUID) != item->runPidUUID) {
+					item->runPid = 0;
+					doRepaint = true;
+				}
+			}
 		}
-		else {
-			int max = (scr.h - items.marginV) /
-					(fontSize + items.icon_size + titleMargin + items.marginV);
-			if(items.num > max)
-				items.rows = max;
-			else
-				items.rows = items.num;
-			if(items.rows > 0)
-				items.cols = items.num / items.rows;
-			if((items.cols*items.rows) != items.num)
-				items.cols++;
-		}
+		return doRepaint;
+	}
+};
 
-		height = (fontSize + items.icon_size + titleMargin + items.marginV) *
-				items.rows + items.marginV;
-		width = (items.icon_size + items.marginH) *
-				items.cols + items.marginH;
+class Launcher: public XWin {
+	LauncherView launcherView;
+protected:
+	void onRepaint(graph_t* g) {
+		setAlpha(true);
+		launcherView.repaint(g);
+	}
+
+	void onEvent(xevent_t* ev) {
+		xinfo_t xinfo;
+		getInfo(xinfo);
+		launcherView.handleEvent(ev, xinfo.wsr);
+		repaint();
+	}
+
+	void onResize(void) {
+		xinfo_t xinfo;
+		getInfo(xinfo);
+		launcherView.layout(xinfo.wsr);
+	}
+
+public:
+	Launcher() {
+	}
+
+	~Launcher() {
+	}
+
+	inline LauncherView* getView() {
+		return &launcherView;
+	}
+
+	void checkProc(void) {
+		if(launcherView.checkProc()) {
+			repaint();
+		}
 	}
 };
 
@@ -515,16 +317,17 @@ int main(int argc, char* argv[]) {
 	x.getDesktopSpace(desk, 0);
 
 	Launcher xwin;
+	LauncherView* view = xwin.getView();
 	const char* cfg = x_get_theme_fname(X_THEME_ROOT, "launcher", "theme.conf");
-	xwin.readConfig(cfg);
-	xwin.loadApps();
-	xwin.layout(desk);
 
-	int32_t w = xwin.getWidth();
-	int32_t h = xwin.getHeight();
-	gpos_t pos = xwin.getPos(desk);
+	view->readConfig(cfg);
+	view->loadApps();
+	view->layout(desk);
 
-	x.open(&xwin, pos.x, pos.y, w, h, "launcher",
+	gsize_t sz = view->getSize();
+	gpos_t pos = view->getPos(desk);
+
+	x.open(&xwin, pos.x, pos.y, sz.w, sz.h, "launcher",
 			XWIN_STYLE_NO_FRAME | XWIN_STYLE_LAUNCHER | XWIN_STYLE_SYSBOTTOM);
 	xwin.setVisible(true);
 

@@ -2,8 +2,11 @@
 #include "x++/XWin.h"
 #include <stdio.h>
 #include <sys/basic_math.h>
+#include <font/font.h>
 
 using namespace Ewok;
+
+static font_t* _sysFont = NULL;
 
 bool X::open(XWin* xwin, int x, int y, uint32_t w, uint32_t h, const char* title, uint32_t style) {
 	xwin_t* xw = xwin_open(&this->x, x, y, w, h, title, style);
@@ -40,6 +43,12 @@ bool X::open(xscreen_t* scr, XWin* xwin, uint32_t w, uint32_t h, const char* tit
 
 X::X(void) {
 	x_init(&x, this);
+}
+
+font_t* X::getSysFont(void) {
+	if(_sysFont == NULL)
+		_sysFont = font_new(DEFAULT_SYSTEM_FONT, DEFAULT_SYSTEM_FONT_SIZE, true);
+	return _sysFont;
 }
 
 void X::run(void (*loop)(void*), void* p) {

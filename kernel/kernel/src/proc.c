@@ -7,6 +7,7 @@
 #include <mm/dma.h>
 #include <mm/shm.h>
 #include <kernel/kevqueue.h>
+#include <kernel/semaphore.h>
 #include <kstring.h>
 #include <kprintf.h>
 #include <queue.h>
@@ -223,7 +224,6 @@ void proc_switch(context_t* ctx, proc_t* to, bool quick){
 			to->ctx.pc = to->ctx.lr = to->space->ipc_server.entry;
 			to->ctx.sp = ALIGN_DOWN(to->space->ipc_server.stack + THREAD_STACK_PAGES * PAGE_SIZE, 8);
 			to->space->ipc_server.do_switch = false; // clear ipc request mask
-			//timer_set_interval(0, MIN_TIMER_FREQ); 
 		}
 	}
 
@@ -319,6 +319,8 @@ static void proc_terminate(context_t* ctx, proc_t* proc) {
 		return;
 
 	proc_unready(proc, ZOMBIE);
+	semaphore_clear(proc->info.pid);
+
 	if(proc->info.type == PROC_TYPE_PROC) {
 		kev_push(KEV_PROC_EXIT, proc->info.pid, 0, 0);
 		int32_t i;
@@ -326,8 +328,10 @@ static void proc_terminate(context_t* ctx, proc_t* proc) {
 			proc_t *p = &_proc_table[i];
 			/*terminate forked from this proc*/
 			if(p->info.father_pid == proc->info.pid) { //terminate forked children, skip reloaded ones
-				//proc_exit(ctx, p, 0);
-				proc_signal_send(ctx, p, SYS_SIG_STOP, false);
+				if(p->info.type == PROC_TYPE_PROC)
+					proc_signal_send(ctx, p, SYS_SIG_STOP, false);
+				else
+					proc_exit(ctx, p, 0);
 			}
 		}
 
@@ -692,7 +696,12 @@ inline void proc_waitpid(context_t* ctx, int32_t pid) {
 	schedule(ctx);
 }
 
-static void proc_wakeup_saved_state(int32_t pid, uint32_t event, proc_t* proc) {
+static void proc_wakeup_all_state(int32_t pid, uint32_t event, proc_t* proc) {
+	if((event == 0 || proc->block_event == event) && 
+			(pid < 0 || proc->info.block_by == pid )) {
+		proc_ready(proc);
+	}
+
 	if((pid < 0 || proc->space->ipc_server.saved_state.block_by == pid) &&
 			(event == 0 || proc->space->ipc_server.saved_state.block_event == event)) {
 		proc->space->ipc_server.saved_state.state = READY;
@@ -736,12 +745,7 @@ void proc_wakeup(int32_t pid, uint32_t event, uint8_t sys_call) {
 		if(proc->info.state == UNUSED ||
 				proc->info.state == ZOMBIE)
 			continue;
-
-		if((event == 0 || proc->block_event == event) && 
-				(pid < 0 || proc->info.block_by == pid )) {
-			proc_ready(proc);
-			proc_wakeup_saved_state(pid, event, proc);
-		}
+		proc_wakeup_all_state(pid, event, proc);
 	}
 }
 
