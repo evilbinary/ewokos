@@ -286,7 +286,7 @@ static void sys_ipc_call(context_t* ctx, int32_t serv_pid, int32_t call_id, prot
 
 	if(serv_proc->space->ipc_server.disabled) {
 		ctx->gpr[0] = -1; // blocked if server disabled, should retry
-		proc_block_on(ctx, serv_pid, (uint32_t)&serv_proc->space->ipc_server, 0);
+		proc_block_on(ctx, serv_pid, (uint32_t)&serv_proc->space->ipc_server.disabled, 0);
 		return;
 	}
 
@@ -301,8 +301,12 @@ static void sys_ipc_call(context_t* ctx, int32_t serv_pid, int32_t call_id, prot
 	}
 
 	ipc_task_t* ipc = proc_ipc_req(serv_proc, client_proc, call_id, data);
-	if(ipc == NULL)
+	if(ipc == NULL) {
+		ctx->gpr[0] = -1; 
+		if(client_proc->ipc_buffer_clean) // blocked if client proc ipc bufferd overflow, should retry
+			proc_block_on(ctx, client_proc->info.pid, (uint32_t)&client_proc->ipc_buffer_clean, 0); 
 		return;
+	}
 
 	ctx->gpr[0] = ipc->uid;
 	if(ipc != proc_ipc_get_task(serv_proc)) // buffered ipc
@@ -449,7 +453,7 @@ static void sys_ipc_enable(void) {
 		return;
 
 	cproc->space->ipc_server.disabled = false;
-	proc_wakeup(cproc->info.pid, (uint32_t)&cproc->space->ipc_server, 0);
+	proc_wakeup(cproc->info.pid, (uint32_t)&cproc->space->ipc_server.disabled, 0);
 }
 
 static int32_t sys_proc_ping(int32_t pid) {
