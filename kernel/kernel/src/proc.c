@@ -200,6 +200,11 @@ void proc_switch(context_t* ctx, proc_t* to, bool quick){
 	if(cproc != NULL && cproc->info.state != UNUSED)
 		memcpy(&cproc->ctx, ctx, sizeof(context_t));
 
+	if(cproc != to) {
+		page_dir_entry_t *vm = to->space->vm;
+		set_translation_table_base((uint32_t)V2P(vm));
+	}
+
 	if(to->info.type == PROC_TYPE_PROC) {
 		if (to->space->interrupt.state == INTR_STATE_START) {																				// have irq request to handle
 			to->space->interrupt.state = INTR_STATE_WORKING; // clear irq request mask
@@ -207,12 +212,16 @@ void proc_switch(context_t* ctx, proc_t* to, bool quick){
 			to->ctx.gpr[0] = to->space->interrupt.interrupt;
 			to->ctx.gpr[1] = to->space->interrupt.data;
 			to->ctx.pc = to->ctx.lr = to->space->interrupt.entry;
+			if(to->space->interrupt.stack == 0)
+				to->space->interrupt.stack = proc_stack_alloc(to);
 			to->ctx.sp = ALIGN_DOWN(to->space->interrupt.stack + THREAD_STACK_PAGES * PAGE_SIZE, 8);
 		}
 		else if (to->space->signal.do_switch) {																			 // have signal request to handle
 			memcpy(&to->space->signal.saved_state.ctx, &to->ctx, sizeof(context_t)); // save "to" context to ipc ctx, will restore after ipc done.
 			to->ctx.gpr[0] = to->space->signal.sig_no;
 			to->ctx.pc = to->ctx.lr = to->space->signal.entry;
+			if(to->space->signal.stack == 0)
+				to->space->signal.stack = proc_stack_alloc(to);
 			to->ctx.sp = ALIGN_DOWN(to->space->signal.stack + THREAD_STACK_PAGES * PAGE_SIZE, 8);
 			to->space->signal.do_switch = false; // clear ipc request mask
 		}
@@ -222,6 +231,8 @@ void proc_switch(context_t* ctx, proc_t* to, bool quick){
 			to->ctx.gpr[0] = ipc->uid;
 			to->ctx.gpr[1] = to->space->ipc_server.extra_data;
 			to->ctx.pc = to->ctx.lr = to->space->ipc_server.entry;
+			if(to->space->ipc_server.stack == 0)
+				to->space->ipc_server.stack = proc_stack_alloc(to);
 			to->ctx.sp = ALIGN_DOWN(to->space->ipc_server.stack + THREAD_STACK_PAGES * PAGE_SIZE, 8);
 			to->space->ipc_server.do_switch = false; // clear ipc request mask
 		}
@@ -242,11 +253,8 @@ void proc_switch(context_t* ctx, proc_t* to, bool quick){
 
 	to->info.state = RUNNING;
 	to->info.block_by = -1;
-	if(cproc != to) {
-		page_dir_entry_t *vm = to->space->vm;
-		set_translation_table_base((uint32_t)V2P(vm));
+	if(cproc != to)
 		set_current_proc(to);
-	}
 	memcpy(ctx, &to->ctx, sizeof(context_t));
 }
 

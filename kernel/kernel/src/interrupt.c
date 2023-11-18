@@ -70,9 +70,6 @@ int32_t interrupt_setup(proc_t* cproc, uint32_t interrupt, uint32_t entry, uint3
 			intr->next = _interrupts[interrupt].head;
 		}
 		_interrupts[interrupt].head = intr;
-		if(cproc->space->interrupt.stack == 0)
-			cproc->space->interrupt.stack = proc_stack_alloc(cproc);
-
 		//irq_enable(interrupt); //TODO
 	}
 	return 0;
@@ -86,9 +83,10 @@ static int32_t interrupt_send_raw(context_t* ctx, uint32_t interrupt,  interrupt
 	if(proc == NULL || proc->space->interrupt.state != INTR_STATE_IDLE)
 		return -1;
 
-	ipc_task_t* ipc = proc_ipc_get_task(proc);
+	/*ipc_task_t* ipc = proc_ipc_get_task(proc);
 	if(ipc != NULL && ipc->state == IPC_BUSY)
 		return -1;
+		*/
 	
 	proc_save_state(proc, &proc->space->interrupt.saved_state);
 	proc->space->interrupt.interrupt = interrupt;
