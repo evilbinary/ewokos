@@ -16,6 +16,7 @@
 using namespace Ewok;
 
 class Menu : public WidgetWin {
+
 protected:
 	void onRepaint(graph_t* g) {
 		setAlpha(true);
@@ -30,7 +31,7 @@ protected:
 	}
 public:
 	Menu() {
-		Container* container = getWidget();
+		Container* container = getRootWidget();
 		container->setType(Container::VERTICLE);
 	
 		Widget* wd = new Label(X::getSysFont(), "item1");
@@ -50,30 +51,75 @@ public:
 	}
 };
 
-class BatteryItem : public Label {
-private: 
-	char text[32] = {0};
-	int  power;
+class BatteryItem : public Widget {
+	int  powerFD;
+
+	void drawCharging(graph_t* g, const grect_t& r, int bat) {
+		static int b = 0;
+		int w = r.w*bat*b/300;
+		graph_gradation(g, r.x+r.w-w, r.y, w, r.h, 0xffffffff, 0xff22dd22, true);
+		b++;
+		b%=4;
+	}
+
+	void drawBat(graph_t* g, const grect_t& r, int bat) {
+		int w = r.w*bat/100;
+		uint32_t color = (bat <= 20) ?0xffed7930 : 0xff22dd22;
+		graph_gradation(g, r.x+r.w-w, r.y, w, r.h, 0xffffffff, color, true);
+	}
+
+	void drawBase(graph_t* g, grect_t& r) {
+		graph_gradation(g, r.x, r.y+2, 3, r.h-4, 0xffffffff, 0xffaaaaaa, true);
+		graph_box(g, r.x, r.y+2, 3, r.h-4, 0xff000000);
+		r.x += 2;
+		r.w -= 2;
+
+		graph_gradation(g, r.x, r.y, r.w, r.h, 0xffffffff, 0xff888888, true);
+		graph_box(g, r.x, r.y, r.w, r.h, 0xff000000);
+		r.x++;
+		r.y++;
+		r.w -= 2;
+		r.h -= 2;
+	}
+
 protected:
-	void onRepaint(graph_t* g, grect_t* rect) {
+	void onRepaint(graph_t* g) {
+		setAlpha(true);
+		grect_t r = getRootArea(true);
+		drawBase(g, r);
+
+		if(powerFD < 0)
+			powerFD = open("/dev/power0", O_RDONLY);
+
+		if(powerFD < 0)
+			return;
+
 		uint8_t buf[4];
-		if(power > 0){
-			if(read(power, buf, 3) == 3){
-				if(!buf[0]){
-					snprintf(text, sizeof(text), "NO");
-				}else if(buf[1]){
-					snprintf(text, sizeof(text), "CH");
-				}else{
-					snprintf(text, sizeof(text), "%d", buf[2]);
-				}
-				label = (const char*)text;
-			}
-		}
-		Label::onRepaint(g, rect);
+		if(read(powerFD, buf, 3) != 3)
+			return;
+			
+		if(buf[0] == 0)
+			return;
+
+		if(buf[1])
+			drawCharging(g, r, buf[2]);
+		else
+			drawBat(g, r, buf[2]);
+	}
+
+	gsize_t getMinSize() {
+		return {56, 28};
 	}
 public:
-	BatteryItem(): Label(X::getSysFont(), text) { 
-		power = open("/dev/power0", O_RDONLY);
+	BatteryItem() {
+		powerFD = -1;
+		setMarginV(6);
+		setMarginH(4);
+	}
+
+	~BatteryItem() {
+		if(powerFD > 0)
+			::close(powerFD);
 	}
 };
 
@@ -81,10 +127,10 @@ class MenubarItem : public Label {
 	Menu *menu;
 protected:
 	void onClick() {
-		grect_t r = getAbsRect();
+		grect_t r = getScreenArea();
 
 		if(menu == NULL) {
-			X *x = getWin()->getX();
+			X *x = getRoot()->getWin()->getX();
 			menu = new Menu();
 			x->open(menu, r.x, r.y+r.h, 100, 100, "menu", XWIN_STYLE_NO_FRAME);
 		}
@@ -108,7 +154,7 @@ public:
 class Menubar : public WidgetWin {
 public:
 	Menubar() {
-		Container* container = getWidget();
+		RootWidget* container = getRootWidget();
 		container->setType(Container::HORIZONTAL);
 		container->setBGColor(0xffffffff);
 
@@ -122,13 +168,12 @@ public:
 		wd->fixedMinSize();
 		container->add(wd);
 
+		wd = new Widget();
+		container->add(wd);
+
 		wd = new BatteryItem();
 		wd->setMarginH(10);
 		wd->fixedMinSize();
-		container->add(wd);
-
-
-		wd = new Widget();
 		container->add(wd);
 	}
 
@@ -136,9 +181,9 @@ public:
 	}
 };
 
-static XWin* _xwin = NULL;
+static Menubar* _xwin = NULL;
 static void timer_handler(void) {
-	_xwin->repaint();
+	_xwin->getRootWidget()->update();
 }
 
 int main(int argc, char* argv[]) {
