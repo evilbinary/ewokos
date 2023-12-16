@@ -12,27 +12,43 @@ Widget::Widget(void)  {
 	next = NULL;
 	prev = NULL;
 	area = {0, 0, 0, 0};
-	bgColor = 0x0; //transparent
-	fgColor = 0xff000000;
 	marginH = 0;
 	marginV = 0;
 	id = _idCounter++;
 	isContainer = false;
+	disabled = false;
 }
 
-void Widget::onRepaint(graph_t* g) {
-	if(bgColor == 0x0)
-		return;
-	grect_t rect = getRootArea();
-	graph_fill(g, rect.x, rect.y, rect.w, rect.h, bgColor);
+bool Widget::onMouse(xevent_t* ev) {
+	return false;
+}
+
+bool Widget::onKey(xevent_t* ev) {
+	return false;
+}
+
+void Widget::sendEvent(xevent_t* ev) { 
+	if(ev->type == XEVT_MOUSE) {
+		onMouse(ev);
+	}
+	else if(ev->type == XEVT_IM) {
+		onKey(ev);
+	}
 }
 
 bool Widget::onEvent(xevent_t* ev) { 
+	if(disabled)
+		return false;
+
 	if(ev->type == XEVT_MOUSE) {
 		grect_t r = getScreenArea();
 		if(ev->value.mouse.x > r.x && ev->value.mouse.x < (r.x+r.w) &&
-				ev->value.mouse.y > r.y && ev->value.mouse.y < (r.y+r.h))
+				ev->value.mouse.y > r.y && ev->value.mouse.y < (r.y+r.h)) {
+			if(ev->state == XEVT_MOUSE_DOWN) {
+				getRoot()->setFocus(this);
+			}
 			return onMouse(ev);
+		}
 	}
 	else if(ev->type == XEVT_IM) {
 			return onKey(ev);
@@ -42,29 +58,41 @@ bool Widget::onEvent(xevent_t* ev) {
 
 RootWidget* Widget::getRoot(void) {
 	if(father == NULL)
-		return (RootWidget*)this;
+		return NULL;
 
-	Widget* wd = father;
+	Container* wd = father;
 	while(wd != NULL && wd->father != NULL)
 		wd = wd->father;
 	return (RootWidget*)wd;
 }
 
-void Widget::repaint(graph_t* g) {
-	onRepaint(g);
+void Widget::repaint(graph_t* g, const Theme* theme) {
+	grect_t r = getRootArea();
+	graph_set_clip(g, r.x, r.y, r.w, r.h);
+	onRepaint(g, theme, r);
 	dirty = false;
 }
 
 void Widget::update() {
 	dirty = true;
-	if(isAlpha() && father != NULL) {
-		father->update();
+	if(father != NULL) {
+		if(isAlpha())
+			father->update();
 	}
-	else {
-		RootWidget* root = getRoot();
-		if(root != NULL)
-			root->updateWin();
-	}
+
+	RootWidget* root = getRoot();
+	if(root != NULL)
+		root->refresh();
+}
+
+void Widget::disable() {
+	disabled = true;
+	update();
+}
+
+void Widget::enable() {
+	disabled = false;
+	update();
 }
 
 gsize_t Widget::getMinSize(void) {
@@ -72,10 +100,13 @@ gsize_t Widget::getMinSize(void) {
 	return sz;
 }
 
-void Widget::fixedMinSize(void) {
-	gsize_t sz = getMinSize();
-	resizeTo(sz.w, sz.h);
+void Widget::fix(uint32_t w, uint32_t h) {
+	resizeTo(w, h);
 	setFixed(true);
+}
+
+void Widget::fix(const gsize_t& size) {
+	fix(size.w, size.h);
 }
 
 void Widget::resizeTo(int w, int h) {
@@ -84,6 +115,10 @@ void Widget::resizeTo(int w, int h) {
 	area.w = w;
 	area.h = h;
 	onResize();
+	if(father != NULL) {
+		father->layout();
+		father->update();
+	}
 }
 
 void Widget::resize(int dw, int dh) {
@@ -96,6 +131,10 @@ void Widget::moveTo(int x, int y) {
 	area.x = x;
 	area.y = y;
 	onMove();
+	if(father != NULL) {
+		father->layout();
+		father->update();
+	}
 }
 
 void Widget::move(int dx, int dy) {
@@ -154,5 +193,6 @@ grect_t Widget::getScreenArea(bool margin) {
 		return {pos.x+marginH, pos.y+marginV, area.w-marginH*2, area.h-marginV*2};
 	return {pos.x, pos.y, area.w, area.h};
 }
+
 
 }

@@ -99,7 +99,7 @@ public:
 		if(v[0] == 0) 
 			v = DEFAULT_SYSTEM_FONT;
 		
-		font_load(v, font_size, &console.textview.font, true);
+		console.textview.font = font_new(v, font_size, true);
 
 		v = sconf_get(sconf, "height");
 		if(v[0] != 0) 
@@ -172,7 +172,7 @@ int main(int argc, char** argv) {
 	w = w==0 ? scr.size.w:w;
 	h = h==0 ? scr.size.h:h;
 
-	x.open(&xwin, (scr.size.w-w)/2, scr.size.h-h, w, h, "xconsoled",
+	x.open(0, &xwin, (scr.size.w-w)/2, scr.size.h-h, w, h, "xconsoled",
 			XWIN_STYLE_NO_TITLE | XWIN_STYLE_NO_FOCUS | XWIN_STYLE_SYSTOP | XWIN_STYLE_LAZY);
 	xwin.setVisible(false);
 	xwin.setAlpha(true);

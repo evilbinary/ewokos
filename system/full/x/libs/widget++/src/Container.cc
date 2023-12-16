@@ -76,6 +76,8 @@ void  Container::onResize() {
 }
 
 bool  Container::onEvent(xevent_t* ev) {
+	if(disabled)
+		return false;
 	Widget* wd = childrenEnd;
 	while(wd != NULL) {
 		if(wd->onEvent(ev)) {
@@ -99,15 +101,18 @@ void  Container::add(Widget* child) {
 	layout();
 }
 
-void  Container::repaint(graph_t* g) {
-	if(dirty)
-		onRepaint(g);
+void  Container::repaint(graph_t* g, const Theme* theme) {
+	if(dirty) {
+		grect_t r = getRootArea();
+		graph_set_clip(g, r.x, r.y, r.w, r.h);
+		onRepaint(g, theme, r);
+	}
 
 	Widget* wd = children;
 	while(wd != NULL) {
 		if(dirty)
 			wd->dirty = true;
-		wd->repaint(g);
+		wd->repaint(g, theme);
 		wd = wd->next;
 	}
 	dirty = false;
@@ -158,5 +163,4 @@ void  Container::clear() {
 Container::~Container() {
 	clear();
 }
-
 }

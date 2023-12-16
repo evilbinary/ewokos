@@ -3,6 +3,7 @@
 
 #include <x++/XWin.h>
 #include <string.h>
+#include <Widget/Theme.h>
 #include <sys/klog.h>
 
 namespace Ewok {
@@ -10,53 +11,55 @@ namespace Ewok {
 class Container;
 class RootWidget;
 class Widget {
-	friend Container;
 	Widget* next;
 	Widget* prev;
 
 	bool isContainer;
 protected:
 	uint32_t id;
-	uint32_t fgColor;
-	uint32_t bgColor;
 	int32_t marginH;
 	int32_t marginV;
-	Widget* father;
+	Container* father;
 
 	bool dirty;
 	bool fixed;
+	bool disabled;
 	bool alpha;
 
 	grect_t area;
 
 	virtual void onResize() { }
 	virtual void onMove() { }
-	virtual bool onMouse(xevent_t* ev) {  return false; }
-	virtual bool onKey(xevent_t* ev) {  return false; }
+	virtual bool onMouse(xevent_t* ev);
+	virtual bool onKey(xevent_t* ev);
 
-	virtual void repaint(graph_t* g);
-	virtual void onRepaint(graph_t* g);
+	virtual void repaint(graph_t* g, const Theme* theme);
+	virtual void onRepaint(graph_t* g, const Theme* theme, const grect_t& r) = 0;
 	virtual bool onEvent(xevent_t* ev);
 public:
+	friend Container;
 	Widget(void);
 	virtual ~Widget() { }
 
-	inline void setFGColor(uint32_t color) { fgColor = color; update(); }
-	inline void setBGColor(uint32_t color) { bgColor = color; update(); }
 	inline void setMarginH(int32_t v) { marginH = v; }
 	inline void setMarginV(int32_t v) { marginV = v; }
 	inline void setFixed(bool fixed) { this->fixed = fixed; }
 	inline void setAlpha(bool alpha) { this->alpha = alpha; }
 	inline bool isAlpha() { return alpha; }
+	inline uint32_t getID() { return id; }
 
-	void update();
-	RootWidget* getRoot(void);
-	void fixedMinSize(void);
+	void disable();
+	void enable();
+	void fix(const gsize_t& size);
+	void fix(uint32_t w, uint32_t h);
+
 	void resizeTo(int w, int h);
 	void resize(int dw, int dh);
 	void moveTo(int x, int y);
 	void move(int dx, int dy);
 	void setArea(int x, int y, int w, int h);
+
+	RootWidget* getRoot(void);
 	gpos_t getRootPos(int32_t x = 0, int32_t y = 0);
 	gpos_t getScreenPos(int32_t x = 0, int32_t y = 0);
 	gpos_t getInsidePos(int32_t screenX, int32_t screenY);
@@ -64,6 +67,8 @@ public:
 	grect_t getScreenArea(bool margin = true);
 
 	virtual gsize_t getMinSize(void);
+	void update();
+	virtual void sendEvent(xevent_t* ev);
 };
 
 }

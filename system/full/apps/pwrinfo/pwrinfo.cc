@@ -19,11 +19,11 @@ class PowerInfoX : public XWin {
 	int powerFD;
 
 	void drawCharging(graph_t* g, const grect_t& r, int bat) {
-		static bool b = true;
-		int w = r.w*bat/100;
-		if(b)
-			graph_gradation(g, r.x+r.w-w, r.y, w, r.h, 0xffffffff, 0xff22dd22, true);
-		b = !b;
+		static int b = 0;
+		int w = r.w*bat*b/300;
+		graph_gradation(g, r.x+r.w-w, r.y, w, r.h, 0xffffffff, 0xff22dd22, true);
+		b++;
+		b%=4;
 	}
 
 	void drawBat(graph_t* g, const grect_t& r, int bat) {
@@ -102,13 +102,10 @@ static void timer_handler(void) {
 int main(int argc, char* argv[]) {
 	(void)argc;
 	(void)argv;
-	grect_t desk;
 
 	X x;
-	x.getDesktopSpace(desk, 0);
-
 	PowerInfoX xwin;
-	x.open(&desk, &xwin, 100, 32, "pwrInfo", XWIN_STYLE_NO_FRAME);
+	x.open(0, &xwin, 64, 32, "pwrInfo", XWIN_STYLE_NO_FRAME);
 	xwin.setVisible(true);
 
 	_xwin = &xwin;

@@ -26,10 +26,10 @@ typedef struct {
 } content_t;
 
 typedef struct {
-	int32_t  font_size;
+	uint32_t  font_size;
 	int32_t  font_fixed;
 	bool shadow;
-	font_t font;
+	font_t *font;
 
 	uint32_t w;
 	uint32_t h;
