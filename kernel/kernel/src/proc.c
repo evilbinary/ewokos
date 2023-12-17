@@ -732,9 +732,9 @@ static void proc_wakeup_all_state(int32_t pid, uint32_t event, proc_t* proc) {
 	}
 }
 
-void proc_wakeup(int32_t pid, uint32_t event, uint8_t sys_call) {
+void proc_wakeup(int32_t pid_by, int32_t pid, uint32_t event, uint8_t sys_call) {
 	if(event != 0 && sys_call != 0) {
-		proc_t* proc_by = proc_get(pid);
+		proc_t* proc_by = proc_get(pid_by);
 		if(proc_by != NULL) {
 			proc_block_event_t* block_evt = get_block_evt(proc_by, event);
 			if(block_evt != NULL)
@@ -743,6 +743,17 @@ void proc_wakeup(int32_t pid, uint32_t event, uint8_t sys_call) {
 				set_block_evt(proc_by, event);
 		}
 	}
+	
+	if(pid >= 0) {
+		if(pid >= PROC_MAX)
+			return;
+		proc_t* proc = &_proc_table[pid];	
+		if(proc->info.state == UNUSED ||
+				proc->info.state == ZOMBIE)
+			return;
+		proc_wakeup_all_state(pid_by, event, proc);
+		return;
+	} 
 
 	int32_t i = 0;	
 	while(1) {
@@ -753,7 +764,9 @@ void proc_wakeup(int32_t pid, uint32_t event, uint8_t sys_call) {
 		if(proc->info.state == UNUSED ||
 				proc->info.state == ZOMBIE)
 			continue;
-		proc_wakeup_all_state(pid, event, proc);
+		if(pid >= 0 && proc->info.pid != pid)
+			continue;
+		proc_wakeup_all_state(pid_by, event, proc);
 	}
 }
 
