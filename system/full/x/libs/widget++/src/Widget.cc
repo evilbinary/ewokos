@@ -25,6 +25,13 @@ Widget::~Widget(void)  {
 		delete themePrivate;
 }
 
+void Widget::setTheme(Theme* theme)  {
+	if(themePrivate != NULL)
+		delete themePrivate;
+	themePrivate = theme;
+	update();
+}
+
 bool Widget::onMouse(xevent_t* ev) {
 	return false;
 }
@@ -73,6 +80,8 @@ RootWidget* Widget::getRoot(void) {
 }
 
 void Widget::repaint(graph_t* g, const Theme* theme) {
+	if(!dirty)
+		return;
 	if(this->themePrivate != NULL)
 		theme = this->themePrivate;
 
@@ -110,8 +119,8 @@ gsize_t Widget::getMinSize(void) {
 }
 
 void Widget::fix(uint32_t w, uint32_t h) {
-	resizeTo(w, h);
 	setFixed(true);
+	resizeTo(w, h);
 }
 
 void Widget::fix(const gsize_t& size) {

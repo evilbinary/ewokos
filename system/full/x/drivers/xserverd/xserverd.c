@@ -247,7 +247,7 @@ static int draw_win(graph_t* disp_g, x_t* xp, xwin_t* win, bool do_frame) {
 
 	if(do_frame)
 		draw_win_frame(xp, win);
-	if(xp->current.win_drag == win && xp->config.win_move_alpha < 0xff) //drag and moving
+	if(xp->current.win_drag == win && (win->xinfo->style & XWIN_STYLE_NO_FRAME) == 0)
 		draw_drag_frame(xp, win->xinfo->display_index);
 
 	win->dirty = false;
@@ -1270,8 +1270,10 @@ static int mouse_handle(x_t* x, xevent_t* ev) {
 			ev->value.mouse.rx = 0;
 			ev->value.mouse.ry = 0;
 		}
-		else if(ev->value.mouse.from_x != ev->value.mouse.x ||
-					ev->value.mouse.from_y != ev->value.mouse.y ||
+		//else if(ev->value.mouse.from_x != ev->value.mouse.x ||
+			//		ev->value.mouse.from_y != ev->value.mouse.y ||
+		else if(x->mouse_state.last_pos.x != ev->value.mouse.x ||
+				x->mouse_state.last_pos.y != ev->value.mouse.y ||
 					x->mouse_state.state == XEVT_MOUSE_DRAG) {
 			x->mouse_state.state = XEVT_MOUSE_DRAG;
 			ev->state = XEVT_MOUSE_DRAG;

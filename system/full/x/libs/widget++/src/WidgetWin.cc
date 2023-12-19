@@ -7,6 +7,7 @@ WidgetWin::WidgetWin() {
 	root = NULL;
 	theme = Theme::loadDefault();
 	timerID = 0;
+	painting = false;
 }
 
 WidgetWin::~WidgetWin() {
@@ -14,12 +15,24 @@ WidgetWin::~WidgetWin() {
 		delete root;
 	if(theme != NULL)
 		delete theme;
+	if(timerID > 0)
+		timer_remove(timerID);
+}
+
+void WidgetWin::setTheme(Theme* theme)  {
+	if(this->theme != NULL)
+		delete this->theme;
+	this->theme = theme;
 }
 
 void WidgetWin::onRepaint(graph_t* g) {
 	if(root == NULL)
 		return;
+	if(painting)
+		return;
+	painting = true;
 	root->repaint(g, theme);
+	painting = false;
 }
 
 void WidgetWin::onResize(void) {
@@ -32,7 +45,7 @@ void WidgetWin::onEvent(xevent_t* ev) {
 	if(root == NULL)
 		return;
 	root->sendEvent(ev);
-	//root->repaintWin();
+	root->repaintWin();
 }
 
 void WidgetWin::timerTask() {
