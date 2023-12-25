@@ -7,21 +7,52 @@
 
 using namespace Ewok;
 
-class Timer: public Label {
+class Timer: public Widget {
+	uint32_t sec;
+	uint32_t min;
+	uint32_t hour;
+
+	void drawClock(graph_t* g, const Theme* theme, const grect_t& r, uint32_t clock) {
+		graph_gradation(g, r.x, r.y, r.w, r.h/2, 0xffffffff, 0xffaaaaaa, true);
+		graph_gradation(g, r.x, r.y+r.h/2, r.w, r.h/2, 0xffffffff, 0xffaaaaaa, true);
+
+		char txt[4];
+		snprintf(txt, 3, "%02d", clock);
+		graph_draw_text_font_align(g, r.x, r.y, r.w, r.h,
+				txt, theme->font, theme->fgColor, FONT_ALIGN_CENTER);
+
+		graph_set(g, r.x, r.y+r.h/2-1, r.w, 2, 0xaa000000);
+		graph_box(g, r.x, r.y, r.w, r.h/2-1, 0xff000000);
+		graph_box(g, r.x, r.y+r.h/2+1, r.w, r.h/2-1, 0xff000000);
+	}
+
 protected:
+
+	void onRepaint(graph_t* g, const Theme* theme, const grect_t& rect) {
+		graph_set(g, rect.x, rect.y+8, rect.w, rect.h-16, 0xaa000000);
+		uint32_t w = (rect.w-8)/3;
+		grect_t r = {rect.x+4, rect.y, w-2, rect.h};
+		drawClock(g, theme, r, hour);
+		r.x += (w+1);
+		drawClock(g, theme, r, min);
+		r.x += (w+1);
+		drawClock(g, theme, r, sec);
+	}
+
 	void onTimer() {
 		uint32_t ksec;
 		kernel_tic(&ksec, NULL);
-		uint32_t min = ksec / 60;
-		uint32_t hour = min / 60;
+		min = ksec / 60;
+		hour = min / 60;
 		min = min % 60;
-		ksec = ksec % 60;
-		char s[16];
-		snprintf(s, 15, "%02d:%02d:%02d", hour, min, ksec);
-		setLabel(s);
+		sec = ksec % 60;
+		update();
 	}
 public: 
-	Timer(const string& label = "00:00:00") : Label(label) {
+	Timer() {
+		sec = 0;
+		min = 0;
+		hour = 0;
 	}
 };
 
@@ -29,7 +60,7 @@ class ClockWin: public WidgetWin {
 protected:
 	void onRepaint(graph_t* g) {
 		setAlpha(true);
-		graph_clear(g, 0x88000000);
+		graph_clear(g, 0x0);
 		WidgetWin::onRepaint(g);
 	}
 
@@ -48,17 +79,18 @@ int main(int argc, char** argv) {
 	ClockWin win;
 
 	Theme* theme = new Theme(font_new("/usr/system/fonts/system.ttf", 48, true));
-	theme->fgColor = 0xffffffff;
-	theme->bgColor = 0xff000000;
+	theme->bgColor = 0xffffffff;
+	theme->fgColor = 0xff000000;
 
-	win.setRoot(new RootWidget());
+	RootWidget* root = new RootWidget();
+	win.setRoot(root);
 	win.setTheme(theme);
-	win.getRoot()->setType(Container::HORIZONTAL);
+	root->setType(Container::HORIZONTAL);
 
 	Timer* timer = new Timer();
-	win.getRoot()->add(timer);
+	root->add(timer);
 
-	x.open(0, &win, 200, 50, "clock", XWIN_STYLE_NO_TITLE);
+	x.open(0, &win, 200, 68, "clock", XWIN_STYLE_NO_FRAME | XWIN_STYLE_ANTI_FSCR);
 	win.setVisible(true);
 	win.setTimer(1);
 	x.run(NULL, &win);
