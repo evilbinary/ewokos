@@ -3,11 +3,11 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <string.h>
-#include <sys/vdevice.h>
-#include <sys/syscall.h>
-#include <sys/keydef.h>
-#include <sys/ipc.h>
-#include <sys/mmio.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/syscall.h>
+#include <ewoksys/keydef.h>
+#include <ewoksys/ipc.h>
+#include <ewoksys/mmio.h>
 #include "gpio_table.h"
 
 #define GPIO_HIGH				1
@@ -93,7 +93,7 @@ int miyoo_gpio_read(int pin)
 }
 
 
-static int joystick_read(int fd, int from_pid, uint32_t node,
+static int joystick_read(int fd, int from_pid, fsinfo_t* node,
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)from_pid;
@@ -155,6 +155,6 @@ int main(int argc, char** argv) {
 	strcpy(dev.name, "joykeyb_mini");
 	dev.read = joystick_read;
 	dev.loop_step = power_button;
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0444);
 	return 0;
 }

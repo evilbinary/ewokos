@@ -11,7 +11,6 @@
 #include <stdbool.h>
 #include <queue.h>
 
-#define PROC_FILE_MAX 128
 #define SHM_MAX 128
 #define BLOCK_EVT_MAX 16
 
@@ -27,7 +26,7 @@ typedef struct {
 	int32_t           refs;
 	bool              ready_ping;
 	
-	uint32_t          shms[SHM_MAX];
+	int32_t          shms[SHM_MAX];
 	proc_block_event_t block_events[BLOCK_EVT_MAX];
 
 	ipc_server_t      ipc_server;
@@ -95,11 +94,13 @@ extern proc_t* kfork(context_t* ctx, int32_t type);
 extern proc_t* kfork_core_halt(uint32_t core);
 
 extern procinfo_t* get_procs(int32_t* num);
+extern int32_t get_proc(int32_t pid, procinfo_t *info);
 
 extern int32_t renew_kernel_tic(uint32_t usec);
 extern void    renew_kernel_sec(void);
 extern void    proc_usleep(context_t* ctx, uint32_t usec);
 extern void    proc_ready(proc_t* proc);
+extern int32_t proc_childof(proc_t* proc, proc_t* parent);
 
 extern uint32_t proc_stack_alloc(proc_t* proc);
 extern void     proc_stack_free(proc_t* proc, uint32_t stack);

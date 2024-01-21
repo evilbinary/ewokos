@@ -2,17 +2,17 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/vfs.h>
-#include <sys/core.h>
-#include <sys/ipc.h>
-#include <sys/proc.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/core.h>
+#include <ewoksys/ipc.h>
+#include <ewoksys/proc.h>
 #include <vprintf.h>
-#include <sys/mstr.h>
+#include <ewoksys/mstr.h>
 #include <fcntl.h>
-#include <sys/syscall.h>
-#include <sys/wait.h>
-#include <sys/keydef.h>
-#include <sys/klog.h>
+#include <ewoksys/syscall.h>
+#include <ewoksys/wait.h>
+#include <ewoksys/keydef.h>
+#include <ewoksys/klog.h>
 #include "shell.h"
 
 bool _initrd = false;
@@ -26,7 +26,7 @@ old_cmd_t* _history_tail = NULL;
 
 #define ENV_PATH "PATH"
 
-static int32_t find_exec(char* fname, char* cmd) {
+static int32_t find_exec(char* cmd, char* fname, char* full_cmd) {
 	fname[0] = 0;
 	fsinfo_t info;
 	//get the cmd file name(without arguments).
@@ -47,7 +47,7 @@ static int32_t find_exec(char* fname, char* cmd) {
 		strcpy(fname, cmd);
 		if(vfs_get_by_name(fname, &info) == 0 && info.type == FS_TYPE_FILE) {
 			cmd[at] = c;
-			strcpy(fname, cmd);
+			strcpy(full_cmd, cmd);
 			return 0;
 		}
 	}
@@ -57,7 +57,7 @@ static int32_t find_exec(char* fname, char* cmd) {
 		snprintf(fname, FS_FULL_NAME_MAX-1, "%s/%s", path, cmd+2);
 		if(vfs_get_by_name(fname, &info) == 0 && info.type == FS_TYPE_FILE) {
 			cmd[at] = c;
-			snprintf(fname, FS_FULL_NAME_MAX-1, "%s/%s", path, cmd+2);
+			snprintf(full_cmd, FS_FULL_NAME_MAX-1, "%s/%s", path, cmd+2);
 			return 0;
 		}
 	}
@@ -67,13 +67,13 @@ static int32_t find_exec(char* fname, char* cmd) {
 	i = 0;
 	while(1) {
 		if(paths[i] == 0 || paths[i] == ':') {
-			strncpy(path, paths, i);
+			sstrncpy(path, paths, i);
 			path[i] = 0;
 			if(path[0] != 0) {
 				snprintf(fname, FS_FULL_NAME_MAX-1, "%s/%s", path, cmd);
 				if(vfs_get_by_name(fname, &info) == 0 && info.type == FS_TYPE_FILE) {
 					cmd[at] = c;
-					snprintf(fname, FS_FULL_NAME_MAX-1, "%s/%s", path, cmd);
+					snprintf(full_cmd, FS_FULL_NAME_MAX-1, "%s/%s", path, cmd);
 					return 0;
 				}
 			}
@@ -118,11 +118,18 @@ static int do_cmd(char* cmd) {
 		cmd++;
 
 	char fname[FS_FULL_NAME_MAX];
-	if(find_exec(fname, cmd) != 0) {
+	char full_cmd[FS_FULL_NAME_MAX];
+	if(find_exec(cmd, fname, full_cmd) != 0) {
 		printf("'%s' not found!\n", cmd);
 		return -1;
 	}
-	exec(fname);
+
+	if(access(fname, X_OK) != 0) {
+		printf("'%s' inexecutable!\n", fname);
+		return -1;
+	}
+
+	exec(full_cmd);
 	return 0;
 }
 
@@ -193,7 +200,7 @@ static void prompt(void) {
 
 static void try_init_stdio(void) {
 	if(!_stdio_inited) {
-		int fd = open("/dev/tty0", 0);
+		int fd = open("/dev/tty0", O_RDWR);
 		if(fd > 0) {
 			dup2(fd, 0);
 			dup2(fd, 1);
@@ -204,7 +211,7 @@ static void try_init_stdio(void) {
 	}
 
 	if(!_stderr_console_inited) {
-		int fd_console = open("/dev/console0", 0);
+		int fd_console = open("/dev/console0", O_RDWR);
 		if(fd_console > 0) {
 			dup2(fd_console, 2);
 			close(fd_console);

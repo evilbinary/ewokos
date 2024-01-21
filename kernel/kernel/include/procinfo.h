@@ -6,6 +6,7 @@
 
 #define PROC_INFO_CMD_MAX 256
 #define PROC_MAX 128
+#define PROC_FILE_MAX 128
 
 enum {
 	UNUSED = 0,
@@ -36,7 +37,7 @@ enum {
 #define IPC_NON_BLOCK        0x01
 #define IPC_NON_RETURN       0x80000000
 #define IPC_LAZY             0x40000000
-#define IPC_NON_RETURN_MASK  0x3fffffff
+#define IPC_NON_RETURN_MASK  0x1fffffff
 
 typedef struct {
 	uint32_t uuid;
@@ -44,7 +45,8 @@ typedef struct {
 	uint32_t core;
 	int32_t  pid; 
 	int32_t  father_pid;
-	int32_t  owner; 
+	int32_t  uid; 
+	int32_t  gid; 
 	int32_t  state; 
 	int32_t  block_by;
 	int32_t  wait_for;

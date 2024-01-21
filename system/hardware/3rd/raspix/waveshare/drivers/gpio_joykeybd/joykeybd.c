@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/vdevice.h>
-#include <sys/syscall.h>
-#include <sys/keydef.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/syscall.h>
+#include <ewoksys/keydef.h>
 #include <arch/bcm283x/gpio.h>
 
 /*default gpio for waveshare GamePi15 Hat*/
@@ -46,7 +46,7 @@ struct gpio_pins{
 	DECLARE_GPIO_KEY(KEY_BUTTON_R1, GPIO_LOW),
 };
 
-static int joykeyb_read(int fd, int from_pid, uint32_t node,
+static int joykeyb_read(int fd, int from_pid, fsinfo_t* node,
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)from_pid;
@@ -91,6 +91,6 @@ int main(int argc, char** argv) {
 	strcpy(dev.name, "joykeyb");
 	dev.read = joykeyb_read;
 
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0444);
 	return 0;
 }

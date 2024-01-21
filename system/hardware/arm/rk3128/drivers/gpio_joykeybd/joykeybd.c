@@ -3,11 +3,11 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <string.h>
-#include <sys/vdevice.h>
-#include <sys/syscall.h>
-#include <sys/keydef.h>
-#include <sys/ipc.h>
-#include <sys/mmio.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/syscall.h>
+#include <ewoksys/keydef.h>
+#include <ewoksys/ipc.h>
+#include <ewoksys/mmio.h>
 
 #define SARADC_CTRL_CHN_MASK        (0x7)
 #define SARADC_CTRL_POWER_CTRL      (0x1<<3)
@@ -152,7 +152,7 @@ static int rockchip_gpio_get_value(struct gpio_pins* pins)
     return (value == pins->active) ? 1 : 0;
 }
 
-static int joystick_read(int fd, int from_pid, uint32_t node,
+static int joystick_read(int fd, int from_pid, fsinfo_t* node,
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)from_pid;
@@ -216,6 +216,6 @@ int main(int argc, char** argv) {
 	strcpy(dev.name, "joykeyb");
 	dev.read = joystick_read;
 	dev.loop_step = power_button;
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0444);
 	return 0;
 }

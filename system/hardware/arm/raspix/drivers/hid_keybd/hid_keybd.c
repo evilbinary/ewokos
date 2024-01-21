@@ -2,18 +2,18 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/vfs.h>
-#include <sys/klog.h>
-#include <sys/ipc.h>
-#include <sys/vdevice.h>
-#include <sys/mmio.h>
-#include <sys/charbuf.h>
-#include <sys/syscall.h>
-#include <sys/proc.h>
-#include <sys/interrupt.h>
-#include <sys/timer.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/klog.h>
+#include <ewoksys/ipc.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/mmio.h>
+#include <ewoksys/charbuf.h>
+#include <ewoksys/syscall.h>
+#include <ewoksys/proc.h>
+#include <ewoksys/interrupt.h>
+#include <ewoksys/timer.h>
 #include <fcntl.h>
-#include <sys/keydef.h>
+#include <ewoksys/keydef.h>
 
 #define KEY_MOD_LCTRL  0x01
 #define KEY_MOD_LSHIFT 0x02
@@ -30,7 +30,7 @@ static bool _idle = true;
 static int  hid;
 static char key[3];
 
-static int keyb_read(int fd, int from_pid, uint32_t node, 
+static int keyb_read(int fd, int from_pid, fsinfo_t* node, 
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)from_pid;
@@ -112,6 +112,6 @@ int main(int argc, char** argv) {
 	dev.read = keyb_read;
 	dev.loop_step = loop;
 
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0444);
 	return 0;
 }

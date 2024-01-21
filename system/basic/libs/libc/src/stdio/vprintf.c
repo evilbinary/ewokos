@@ -7,8 +7,7 @@
 
 /* forward declarations for local functions */
 static void print_string(outc_func_t outc, void* p, const char *str, int32_t width);
-static void print_int(outc_func_t outc, void* p, int32_t numberm, int32_t width, uint8_t zero);
-static void print_uint_in_base(outc_func_t outc, void* p, uint32_t number, uint32_t base, int32_t width, uint8_t zero, uint8_t cap);
+static void print_uint_in_base(outc_func_t outc, void* p, uint32_t number, uint32_t base, int32_t width, uint8_t zero, uint8_t cap, uint8_t nag);
 
 /*
  * unsigned_divmod divides numerator and denmoriator, then returns the quotient
@@ -134,24 +133,29 @@ next:
 		/* int32_t */
 		case 'd': {
 			int32_t int_arg = va_arg(ap, int);
-			print_int(outc, p, int_arg, width, zero);
+			uint8_t nag = 0;
+			if(int_arg < 0) {
+				int_arg = -int_arg;
+				nag = 1;
+			}
+			print_uint_in_base(outc, p, int_arg, 10, width, zero, 0, nag);
 			break;
 		}
 		/* unsigned int32_t */
 		case 'u': {
 			uint32_t uint_arg = va_arg(ap, uint32_t);
-			print_uint_in_base(outc, p, uint_arg, 10, width, zero, 0);
+			print_uint_in_base(outc, p, uint_arg, 10, width, zero, 0, 0);
 			break;
 		}
 		/* hexadecimal */
 		case 'x': {
 			int32_t uint_arg = va_arg(ap, uint32_t);
-			print_uint_in_base(outc, p, uint_arg, 16, width, zero, 0);
+			print_uint_in_base(outc, p, uint_arg, 16, width, zero, 0, 0);
 			break;
 		}
 		case 'X': {
 			int32_t uint_arg = va_arg(ap, uint32_t);
-			print_uint_in_base(outc, p, uint_arg, 16, width, zero, 1);
+			print_uint_in_base(outc, p, uint_arg, 16, width, zero, 1, 0);
 			break;
 		}
 		case 'l':{
@@ -168,8 +172,7 @@ static void print_string(outc_func_t outc, void* p, const char *str, int32_t wid
 	int32_t len = (int32_t)strlen(str);
 	int32_t i = 0;
 
-	if(width < 0) {
-		width = -width;
+	if(width > 0) {
 		for(; i<width-len; i++) {
 			outc(' ', p);
 		}
@@ -183,8 +186,11 @@ static void print_string(outc_func_t outc, void* p, const char *str, int32_t wid
 			break;
 	}
 
-	for(; i< width; i++) {
-		outc(' ', p);
+	if(width < 0) {
+		width = -width;
+		for(; i< width; i++) {
+			outc(' ', p);
+		}
 	}
 }
 
@@ -201,28 +207,21 @@ static void print_uint_in_base_raw(char* s, uint32_t number, uint32_t base, uint
 		*s = DIGITS[last_digit];
 }
 
-static void print_int(outc_func_t outc, void* p, int32_t number, int32_t width, uint8_t zero) {
-	if (number < 0) {
-		outc('-', p);
-		width--;
-		print_uint_in_base(outc, p, -number, 10, width, zero, 0);
-	}
-	else {
-		print_uint_in_base(outc, p, number, 10, width, zero, 0);
-	}
-}
-
-static void print_uint_in_base(outc_func_t outc, void* p, uint32_t number, uint32_t base, int32_t width, uint8_t zero, uint8_t cap) {
+static void print_uint_in_base(outc_func_t outc, void* p, uint32_t number, uint32_t base, int32_t width, uint8_t zero, uint8_t cap, uint8_t nag) {
 	char s[32];
 	memset(s, 0, 32);
-	print_uint_in_base_raw(s, number, base, cap);
 
-	int32_t len = width- (int32_t)strlen(s);
+	print_uint_in_base_raw(s, number, base, cap);
+	if(nag == 1)
+		s[strlen(s)] = '-';
+
+	int32_t w = width >= 0 ? width:-width;
+	int32_t len = w - (int32_t)strlen(s);
 	int32_t i = 0;
 
-	if(zero) {
+	if(width > 0) {
 		for(; i<len; i++) {
-			outc('0', p);
+			outc(zero ? '0':' ', p);
 		}
 	}
 
@@ -234,7 +233,7 @@ static void print_uint_in_base(outc_func_t outc, void* p, uint32_t number, uint3
 		i++;
 	}
 
-	while(i < width) {
+	while(i < w) {
 		outc(' ', p);
 		i++;
 	}

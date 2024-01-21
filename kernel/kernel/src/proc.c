@@ -49,6 +49,15 @@ void procs_init(void) {
 	}
 }
 
+int32_t  proc_childof(proc_t* proc, proc_t* parent) {
+	while(proc != NULL) {
+		if(proc == parent)
+			return 0;
+		proc = proc_get(proc->info.father_pid);
+	}
+	return -1;
+}
+
 inline proc_t* proc_get(int32_t pid) {
 	if(pid < 0 || pid >= PROC_MAX ||
 			_proc_table[pid].info.state == UNUSED ||
@@ -492,7 +501,7 @@ inline void proc_free(proc_t* proc, void* p) {
 
 static inline uint32_t core_fetch(proc_t* proc) {
 	(void)proc;
-	if(_sys_info.cores == 1 || proc->info.owner < 0)
+	if(_sys_info.cores == 1 || proc->info.uid < 0)
 		return 0;
 
 	//fetch the next core.
@@ -687,7 +696,10 @@ void proc_wakeup(int32_t pid_by, int32_t pid, uint32_t event) {
 		if(proc->info.state == UNUSED ||
 				proc->info.state == ZOMBIE)
 			return;
-		proc_wakeup_all_state(pid_by, event, proc);
+		if(proc == proc_get_proc(get_current_proc())) //self force wakeup
+			proc_wakeup_all_state(-1, 0, proc);
+		else
+			proc_wakeup_all_state(pid_by, event, proc);
 		return;
 	} 
 
@@ -699,8 +711,6 @@ void proc_wakeup(int32_t pid_by, int32_t pid, uint32_t event) {
 		i++;
 		if(proc->info.state == UNUSED ||
 				proc->info.state == ZOMBIE)
-			continue;
-		if(pid >= 0 && proc->info.pid != pid)
 			continue;
 		proc_wakeup_all_state(pid_by, event, proc);
 	}
@@ -757,7 +767,8 @@ proc_t* kfork_raw(context_t* ctx, int32_t type, proc_t* parent) {
 		return NULL;
 	}
 	child->info.father_pid = parent->info.pid;
-	child->info.owner = parent->info.owner;
+	child->info.uid = parent->info.uid;
+	child->info.gid = parent->info.gid;
 	memcpy(&child->ctx, &parent->ctx, sizeof(context_t));
 
 	if(type == PROC_TYPE_PROC) {
@@ -784,14 +795,15 @@ proc_t* kfork(context_t* ctx, int32_t type) {
 	return child;
 }
 
+/*
 static int32_t get_procs_num(void) {
 	proc_t* cproc = get_current_proc();
 	int32_t res = 0;
 	int32_t i;
 	for(i=0; i<PROC_MAX; i++) {
 		if(_proc_table[i].info.state != UNUSED &&
-				(cproc->info.owner == 0 ||
-				 _proc_table[i].info.owner == cproc->info.owner)) {
+				(cproc->info.uid == 0 ||
+				 _proc_table[i].info.uid == cproc->info.uid)) {
 			res++;
 		}
 	}
@@ -804,7 +816,7 @@ procinfo_t* get_procs(int32_t *num) {
 	if(*num == 0)
 		return NULL;
 
-	/*need to be freed later used!*/
+	//need to be freed later used!
 	procinfo_t* procs = (procinfo_t*)proc_malloc(cproc, sizeof(procinfo_t)*(*num));
 	if(procs == NULL)
 		return NULL;
@@ -813,8 +825,8 @@ procinfo_t* get_procs(int32_t *num) {
 	int32_t i;
 	for(i=0; i<PROC_MAX && j<(*num); i++) {
 		if(_proc_table[i].info.state != UNUSED && 
-				(cproc->info.owner == 0 ||
-				 _proc_table[i].info.owner == cproc->info.owner)) {
+				(cproc->info.uid == 0 ||
+				 _proc_table[i].info.uid == cproc->info.uid)) {
 			proc_t* p = &_proc_table[i];
 			memcpy(&procs[j], &p->info, sizeof(procinfo_t));
 			procs[j].heap_size = p->space->heap_size;
@@ -824,6 +836,54 @@ procinfo_t* get_procs(int32_t *num) {
 
 	*num = j;
 	return procs;
+}
+*/
+
+static int32_t get_procs_num(void) {
+	proc_t* cproc = get_current_proc();
+	int32_t res = 0;
+	int32_t i;
+	for(i=0; i<PROC_MAX; i++) {
+		if(_proc_table[i].info.state != UNUSED) 
+			res++;
+	}
+	return res;
+}
+
+procinfo_t* get_procs(int32_t *num) {
+	proc_t* cproc = get_current_proc();
+	*num = get_procs_num();
+	if(*num == 0)
+		return NULL;
+
+	//need to be freed later used!
+	procinfo_t* procs = (procinfo_t*)proc_malloc(cproc, sizeof(procinfo_t)*(*num));
+	if(procs == NULL)
+		return NULL;
+
+	int32_t j = 0;
+	int32_t i;
+	for(i=0; i<PROC_MAX && j<(*num); i++) {
+		if(_proc_table[i].info.state != UNUSED) {
+			proc_t* p = &_proc_table[i];
+			memcpy(&procs[j], &p->info, sizeof(procinfo_t));
+			procs[j].heap_size = p->space->heap_size;
+			j++;
+		}
+	}
+
+	*num = j;
+	return procs;
+}
+
+int32_t get_proc(int32_t pid, procinfo_t *info) {
+	proc_t* proc = proc_get(pid);
+	if(proc == NULL)
+		return -1;
+
+	memcpy(info, &proc->info, sizeof(procinfo_t));
+	info->heap_size = proc->space->heap_size;
+	return 0;
 }
 
 static int32_t renew_sleep_counter(uint32_t usec) {

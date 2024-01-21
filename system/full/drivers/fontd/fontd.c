@@ -3,11 +3,11 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/vfs.h>
+#include <ewoksys/vfs.h>
 #include <ttf/ttf.h>
-#include <sys/vdevice.h>
-#include <sys/syscall.h>
-#include <sys/klog.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/syscall.h>
+#include <ewoksys/klog.h>
 #include <font/font.h>
 
 #define NAME_LEN 128
@@ -81,7 +81,7 @@ static int font_open(const char* fname, int ppm, int ttf_index) {
 			return -1;
 
 		_ttfs[i].ttf = ttf;
-		strncpy(_ttfs[i].name, fname, NAME_LEN-1);
+		sstrncpy(_ttfs[i].name, fname, NAME_LEN-1);
 		ttf_index = i;
 	}
 
@@ -198,7 +198,7 @@ int main(int argc, char** argv) {
 		klog("ok\n");
 	}
 
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0444);
 	font_dev_quit();
 	return 0;
 }

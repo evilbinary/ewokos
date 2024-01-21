@@ -2,13 +2,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/vfs.h>
-#include <sys/vdevice.h>
-#include <sys/charbuf.h>
-#include <sys/mmio.h>
-#include <sys/proc.h>
-#include <sys/ipc.h>
-#include <sys/interrupt.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/charbuf.h>
+#include <ewoksys/mmio.h>
+#include <ewoksys/proc.h>
+#include <ewoksys/ipc.h>
+#include <ewoksys/interrupt.h>
 
 /* memory mapping for the serial port */
 #define UART0 ((volatile uint32_t*)(_mmio_base+0x001f1000))
@@ -44,7 +44,7 @@ int32_t uart_write(const void* data, uint32_t size) {
 
 static charbuf_t _buffer;
 
-static int tty_read(int fd, int from_pid, uint32_t node,
+static int tty_read(int fd, int from_pid, fsinfo_t* node,
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)from_pid;
@@ -63,7 +63,7 @@ static int tty_read(int fd, int from_pid, uint32_t node,
 	return 1;
 }
 
-static int tty_write(int fd, int from_pid, uint32_t node,
+static int tty_write(int fd, int from_pid, fsinfo_t* node,
 		const void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)node;
@@ -95,6 +95,6 @@ int main(int argc, char** argv) {
 	dev.write = tty_write;
 
 	sys_interrupt_setup(SYS_INT_UART0, interrupt_handle, 0);
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0666);
 	return 0;
 }

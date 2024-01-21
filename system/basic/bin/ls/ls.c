@@ -3,7 +3,9 @@
 #include <vprintf.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
 #include <dirent.h>
+#include <ewoksys/session.h>
 
 static inline const char* get_show_name(const char* name, int32_t type) {
 	static char ret[128];
@@ -12,18 +14,34 @@ static inline const char* get_show_name(const char* name, int32_t type) {
 	else if(type == DT_BLK || type == DT_CHR) 
 		snprintf(ret, 127, "*%s", name);
 	else
-		strncpy(ret, name, 127);
+		sstrncpy(ret, name, 127);
 	return ret;
 }
 
-static inline const char* get_show_type(int32_t type) {
+static inline char get_show_type(int32_t type) {
 	if(type == DT_BLK)
-		return "b";
+		return 'b';
 	else if(type == DT_CHR)
-		return "c";
+		return 'c';
 	else if(type == DT_DIR)
-		return "r";
-	return "f";
+		return 'd';
+	return '-';
+}
+
+static inline const char* get_show_mode(uint32_t mode, int32_t type) {
+	static char ret[16];
+	snprintf(ret, 15, "%c%c%c%c%c%c%c%c%c%c",
+		get_show_type(type),
+		(mode & 0400) == 0 ? '-':'r',
+		(mode & 0200) == 0 ? '-':'w',
+		(mode & 0100) == 0 ? '-':'x',
+		(mode & 040) == 0 ? '-':'r',
+		(mode & 020) == 0 ? '-':'w',
+		(mode & 010) == 0 ? '-':'x',
+		(mode & 04) == 0 ? '-':'r',
+		(mode & 02) == 0 ? '-':'w',
+		(mode & 01) == 0 ? '-':'x');
+	return ret;
 }
 
 int main(int argc, char* argv[]) {
@@ -32,6 +50,7 @@ int main(int argc, char* argv[]) {
 
 	const char* r;
 	char cwd[FS_FULL_NAME_MAX];
+	char fname[FS_FULL_NAME_MAX];
 
 	if(argc >= 2)
 		r = argv[1];
@@ -41,22 +60,27 @@ int main(int argc, char* argv[]) {
 	DIR* dirp = opendir(r);
 	if(dirp == NULL)
 		return -1;
-	printf("  NAME                     TYPE  SIZE\n");
 	while(1) {
 		struct dirent* it = readdir(dirp);
 		if(it == NULL)
 			break;
 
-		int sz = it->d_reclen / 1024;
-		if(it->d_reclen != 0 && sz == 0)
-			sz++;
-		const char* show_name = get_show_name(it->d_name, it->d_type);
-		const char* show_type = get_show_type(it->d_type);
-
-		if(it->d_reclen >= 1024)
-			printf("  %24s  %4s %dK\n", show_name, show_type, sz);
+		if(strcmp(r, "/") == 0)
+			snprintf(fname, FS_FULL_NAME_MAX, "/%s", it->d_name);
 		else
-			printf("  %24s  %4s %d\n", show_name, show_type, it->d_reclen);
+			snprintf(fname, FS_FULL_NAME_MAX, "%s/%s", r, it->d_name);
+
+		struct stat st;
+		stat(fname, &st);
+
+		const char* show_name = get_show_name(it->d_name, it->d_type);
+		const char* show_mode = get_show_mode(st.st_mode, it->d_type);
+
+		session_info_t info, infog;
+		session_get_by_uid(st.st_uid, &info);
+		session_get_by_uid(st.st_gid, &infog);
+
+		printf("%-10s  %-8s %-8s %8d  %s\n", show_mode, info.user, infog.user, it->d_reclen, show_name);
 	}
 	closedir(dirp);
 	return 0;

@@ -44,9 +44,9 @@ static void sys_signal(context_t* ctx, int32_t pid, int32_t sig) {
 	ctx->gpr[0] = -1;
 	proc_t* proc = proc_get(pid);
 	proc_t* cproc = get_current_proc();
-	if((cproc->info.owner > 0 &&
-			cproc->info.owner != proc->info.owner) ||
-			proc->info.owner < 0) {
+	if((cproc->info.uid > 0 &&
+			cproc->info.uid != proc->info.uid) ||
+			proc->info.uid < 0) {
 		return;
 	}
 	proc_signal_send(ctx, proc, sig, true);
@@ -65,7 +65,7 @@ static int32_t sys_getpid(int32_t pid) {
 	if(proc == NULL)
 		return -1;
 
-	if(cproc->info.owner > 0 && cproc->info.owner != proc->info.owner)
+	if(cproc->info.uid > 0 && cproc->info.uid != proc->info.uid)
 		return -1;
 
 	proc_t* p = proc_get_proc(proc);
@@ -171,9 +171,17 @@ static void sys_load_elf(context_t* ctx, const char* cmd, void* elf, uint32_t el
 
 static int32_t sys_proc_set_uid(int32_t uid) {
 	proc_t* cproc = get_current_proc();
-	if(cproc->info.owner > 0)	
+	if(cproc->info.uid > 0)	
 		return -1;
-	cproc->info.owner = uid;
+	cproc->info.uid = uid;
+	return 0;
+}
+
+static int32_t sys_proc_set_gid(int32_t gid) {
+	proc_t* cproc = get_current_proc();
+	if(cproc->info.uid > 0)	
+		return -1;
+	cproc->info.gid = gid;
 	return 0;
 }
 
@@ -207,13 +215,13 @@ static void	sys_get_sys_state(sys_state_t* info) {
 	memcpy(info->svc_counter, _svc_counter, SYS_CALL_NUM*4);
 }
 
-static int32_t sys_shm_alloc(uint32_t size, int32_t flag) {
-	return (int32_t)shm_alloc(size, flag);
+static int32_t sys_shm_get(int32_t id, uint32_t size, int32_t flag) {
+	return (int32_t)shm_get(id, size, flag);
 }
 
-static void* sys_shm_map(void* p) {
+static void* sys_shm_map(int32_t id) {
 	proc_t* cproc = get_current_proc();
-	return shm_proc_map(cproc->info.pid, p);
+	return shm_proc_map(cproc->info.pid, id);
 }
 
 static int32_t sys_shm_unmap(void* p) {
@@ -221,14 +229,14 @@ static int32_t sys_shm_unmap(void* p) {
 	return shm_proc_unmap(cproc->info.pid, p);
 }
 
-static int32_t sys_shm_ref(void* p) {
+static int32_t sys_shm_ref(int32_t id) {
 	proc_t* cproc = get_current_proc();
-	return shm_proc_ref(cproc->info.pid, p);
+	return shm_proc_ref(cproc->info.pid, id);
 }
 	
 static uint32_t sys_dma_map(uint32_t size) {
 	proc_t* cproc = get_current_proc();
-	if(cproc->info.owner > 0)
+	if(cproc->info.uid > 0)
 		return 0;
 
 	uint32_t paddr = dma_alloc(cproc->info.pid, size);
@@ -242,7 +250,7 @@ static uint32_t sys_dma_map(uint32_t size) {
 
 static uint32_t sys_mem_map(uint32_t vaddr, uint32_t paddr, uint32_t size) {
 	proc_t* cproc = get_current_proc();
-	if(cproc->info.owner > 0)
+	if(cproc->info.uid > 0)
 		return 0;
 
 	if(paddr == DMA_MAGIC)
@@ -260,11 +268,6 @@ static uint32_t sys_mem_map(uint32_t vaddr, uint32_t paddr, uint32_t size) {
 static void sys_ipc_setup(context_t* ctx, uint32_t entry, uint32_t extra_data, uint32_t flags) {
 	proc_t* cproc = get_current_proc();
 	ctx->gpr[0] = proc_ipc_setup(ctx, entry, extra_data, flags);
-	if((flags & IPC_NON_BLOCK) == 0) {
-		cproc->info.state = BLOCK;
-		cproc->info.block_by = cproc->info.pid;
-		schedule(ctx);
-	}
 }
 
 static void sys_ipc_call(context_t* ctx, int32_t serv_pid, int32_t call_id, proto_t* data) {
@@ -518,6 +521,7 @@ static void sys_proc_block(context_t* ctx, int32_t pid_by, uint32_t evt) {
 				block_evt->event = 0;
 		}
 	}	
+
 	proc_block_on(ctx, proc_by->info.pid, evt);
 }
 
@@ -534,7 +538,7 @@ static void sys_proc_wakeup(context_t* ctx, int32_t pid, uint32_t evt) {
 
 static void sys_core_proc_ready(void) {
 	proc_t* cproc = get_current_proc();
-	if(cproc->info.owner > 0)
+	if(cproc->info.uid > 0)
 		return;
 	_core_proc_ready = true;
 	_core_proc_pid = cproc->info.pid;
@@ -556,7 +560,7 @@ static int32_t sys_get_kernel_tic(uint32_t* sec, uint32_t* hi, uint32_t* low) {
 
 static int32_t sys_interrupt_setup(uint32_t interrupt, uint32_t entry, uint32_t data) {
 	proc_t * cproc = get_current_proc();
-	if(cproc->info.owner > 0)
+	if(cproc->info.uid > 0)
 		return -1;
 	return interrupt_setup(cproc, interrupt, entry, data);
 }
@@ -567,7 +571,7 @@ static void sys_interrupt_end(context_t* ctx) {
 
 static inline void sys_soft_int(context_t* ctx, int32_t to_pid, uint32_t entry, uint32_t data) {
 	proc_t* proc = proc_get_proc(get_current_proc());
-	if(proc->info.owner > 0)
+	if(proc->info.uid > 0)
 		return;
 	interrupt_soft_send(ctx, to_pid, entry, data);
 }
@@ -587,6 +591,13 @@ static inline void sys_schd_core_lock(void) {
 static inline void sys_schd_core_unlock(void) {
 	proc_t* cproc = get_current_proc();
 	cproc->schd_core_lock_counter = 0;
+}
+
+static inline void sys_set_timer_intr_usec(uint32_t usec) {
+	proc_t* cproc = get_current_proc();
+	if(cproc->info.uid > 0)
+		return;
+	_kernel_config.timer_intr_usec = usec;
 }
 
 static inline void sys_root(void) {
@@ -649,7 +660,13 @@ static inline void _svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_
 		ctx->gpr[0] = sys_proc_set_uid(arg0);
 		return;
 	case SYS_PROC_GET_UID: 
-		ctx->gpr[0] = get_current_proc()->info.owner;
+		ctx->gpr[0] = get_current_proc()->info.uid;
+		return;
+	case SYS_PROC_SET_GID: 
+		ctx->gpr[0] = sys_proc_set_gid(arg0);
+		return;
+	case SYS_PROC_GET_GID: 
+		ctx->gpr[0] = get_current_proc()->info.gid;
 		return;
 	case SYS_PROC_GET_CMD: 
 		ctx->gpr[0] = sys_proc_get_cmd(arg0, (char*)arg1, arg2);
@@ -666,20 +683,20 @@ static inline void _svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_
 	case SYS_GET_KERNEL_TIC:
 		ctx->gpr[0] = sys_get_kernel_tic((uint32_t*)arg0, (uint32_t*)arg1, (uint32_t*)arg2);
 		return;
+	case SYS_GET_PROC: 
+		ctx->gpr[0] = (int32_t)get_proc(arg0, (procinfo_t*)arg1);
+		return;
 	case SYS_GET_PROCS: 
 		ctx->gpr[0] = (int32_t)get_procs((int32_t*)arg0);
 		return;
-	case SYS_PROC_SHM_ALLOC:
-		ctx->gpr[0] = (int32_t)sys_shm_alloc(arg0, arg1);
+	case SYS_PROC_SHM_GET:
+		ctx->gpr[0] = (int32_t)sys_shm_get(arg0, arg1, arg2);
 		return;
 	case SYS_PROC_SHM_MAP:
-		ctx->gpr[0] = (int32_t)sys_shm_map((void*)arg0);
+		ctx->gpr[0] = (int32_t)sys_shm_map(arg0);
 		return;
 	case SYS_PROC_SHM_UNMAP:
 		ctx->gpr[0] = sys_shm_unmap((void*)arg0);
-		return;
-	case SYS_PROC_SHM_REF:
-		ctx->gpr[0] = sys_shm_ref((void*)arg0);
 		return;
 	case SYS_THREAD:
 		sys_thread(ctx, (uint32_t)arg0, (uint32_t)arg1, arg2);
@@ -770,6 +787,9 @@ static inline void _svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_
 		return;	
 	case SYS_SCHD_CORE_UNLOCK:	
 		sys_schd_core_unlock();
+		return;	
+	case SYS_SET_TIMER_INTR_USEC:	
+		sys_set_timer_intr_usec(arg0);
 		return;	
 	case SYS_CLOSE_KCONSOLE:	
 		sys_root();

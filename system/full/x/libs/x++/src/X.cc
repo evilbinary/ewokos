@@ -1,7 +1,7 @@
 #include "x++/X.h"
 #include "x++/XWin.h"
 #include <stdio.h>
-#include <sys/basic_math.h>
+#include <ewoksys/basic_math.h>
 #include <font/font.h>
 
 using namespace Ewok;
@@ -53,7 +53,7 @@ void X::run(void (*loop)(void*), void* p) {
 }
 
 void X::terminate(void) {
-	x.terminated = true;
+	x_terminate(&x);
 }
 
 bool X::getScreenInfo(xscreen_t& scr, int index) {

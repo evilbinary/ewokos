@@ -2,9 +2,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/vfs.h>
-#include <sys/vdevice.h>
-#include <sys/syscall.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/syscall.h>
 
 #define MAX_DUP_DEV 8
 
@@ -13,7 +13,7 @@ static int _fds_num = 0;
 
 static int dup_write(int fd, 
 		int from_pid,
-		uint32_t node,
+		fsinfo_t* node,
 		const void* buf,
 		int size,
 		int offset,
@@ -52,6 +52,6 @@ int main(int argc, char** argv) {
 	strcpy(dev.name, "dup");
 	dev.write = dup_write;
 
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0666);
 	return 0;
 }

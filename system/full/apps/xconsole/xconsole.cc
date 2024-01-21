@@ -5,11 +5,12 @@
 #include <string.h>
 #include <console/console.h>
 #include <sconf/sconf.h>
-#include <sys/vfs.h>
-#include <sys/keydef.h>
-#include <sys/klog.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/keydef.h>
+#include <ewoksys/proc.h>
+#include <ewoksys/klog.h>
 #include <ttf/ttf.h>
-#include <sys/basic_math.h>
+#include <ewoksys/basic_math.h>
 #include <x++/X.h>
 #include <pthread.h>
 
@@ -168,18 +169,17 @@ static void* thread_loop(void* p) {
 	while(!_termniated) {
 		char buf[512];
 		int size = read(0, buf, 512);
-		if(_termniated)
-			break;
 		if(size > 0) {
 			console->put(buf, size);
 			console->rollEnd();
 			console->repaint();
 		}
 		else if(errno != EAGAIN) {
-			console->close();
 			break;
 		}
 	}
+	if(!_termniated)
+		console->close();
 	_thread_done = true;
 	return NULL;
 }
@@ -206,6 +206,7 @@ static int run(int argc, char* argv[]) {
 	x.run(NULL, &xwin);
 	_termniated = true;
 	close(0);
+	close(1);
 	while(!_thread_done)
 		usleep(2000);
 	return 0;

@@ -1,8 +1,9 @@
 #include <stdlib.h>
-#include <sys/ipc.h>
-#include <sys/proc.h>
-#include <sys/core.h>
+#include <ewoksys/ipc.h>
+#include <ewoksys/proc.h>
+#include <ewoksys/core.h>
 #include <string.h>
+#include <stdio.h>
 
 const char* getenv(const char* name) {
 	static char ret[1024];
@@ -16,7 +17,7 @@ const char* getenv(const char* name) {
 	PF->clear(&in);
 	if(res == 0) {
 		if(proto_read_int(&out) == 0) {
-			strncpy(ret, proto_read_str(&out), 1023);
+			sstrncpy(ret, proto_read_str(&out), 1023);
 		}
 	}
 	PF->clear(&out);

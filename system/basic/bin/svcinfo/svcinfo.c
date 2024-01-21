@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/syscall.h>
+#include <ewoksys/syscall.h>
 #include <sysinfo.h>
 #include <string.h>
 
@@ -42,6 +42,10 @@ static inline const char* svc_name(int32_t code) {
 		return "set_uid";
 	case SYS_PROC_GET_UID: 
 		return "get_uid";
+	case SYS_PROC_SET_GID: 
+		return "set_gid";
+	case SYS_PROC_GET_GID: 
+		return "get_gid";
 	case SYS_PROC_GET_CMD: 
 		return "get_cmd";
 	case SYS_PROC_SET_CMD: 
@@ -54,14 +58,14 @@ static inline const char* svc_name(int32_t code) {
 		return "kernel_tic";
 	case SYS_GET_PROCS: 
 		return "get_procs";
-	case SYS_PROC_SHM_ALLOC:
+	case SYS_GET_PROC: 
+		return "get_proc";
+	case SYS_PROC_SHM_GET:
 		return "shm_alloc";
 	case SYS_PROC_SHM_MAP:
 		return "shm_map";
 	case SYS_PROC_SHM_UNMAP:
 		return "shm_unmap";
-	case SYS_PROC_SHM_REF:
-		return "shm_ref";
 	case SYS_THREAD:
 		return "thread";
 	case SYS_KPRINT:
@@ -124,20 +128,25 @@ static inline const char* svc_name(int32_t code) {
 		return "sys_schd_core_unlock";
 	case SYS_CLOSE_KCONSOLE:
 		return "sys_root";
+	case SYS_SET_TIMER_INTR_USEC:
+		return "sys_set_timer_intr_usec";
 	}
 	return "unknown";
 }
 
 int main(int argc, char* argv[]) {
+	(void)argc;
+	(void)argv;
 	sys_state_t sys_state;
 
 	syscall1(SYS_GET_SYS_STATE, (int32_t)&sys_state);
-	printf("SVC  TYPE             TIMES            %%\n");
+	printf("SVC  TIMES      %%  TYPE\n"
+				 "----------------------------------\n");
 	for(int i=0; i<SYS_CALL_NUM; i++) {
-		printf("%4d %16s %16d %d\n", i, 
-				svc_name(i), 
+		printf("%-4d %-8d %2d%%  %s\n", i, 
 				sys_state.svc_counter[i],
-				sys_state.svc_counter[i]*100/sys_state.svc_total);
+				sys_state.svc_counter[i]*100/sys_state.svc_total,
+				svc_name(i));
 	}
 	printf("\ntotal:  %d\n", sys_state.svc_total);
 	return 0;

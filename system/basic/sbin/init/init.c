@@ -3,13 +3,14 @@
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
-#include <sys/syscall.h>
-#include <sys/vfs.h>
+#include <ewoksys/syscall.h>
+#include <ewoksys/vfs.h>
 #include <vprintf.h>
 #include <sysinfo.h>
-#include <sys/klog.h>
-#include <sys/ipc.h>
-#include <sys/proc.h>
+#include <ewoksys/klog.h>
+#include <ewoksys/ipc.h>
+#include <ewoksys/proc.h>
+#include <ewoksys/wait.h>
 #include <dirent.h>
 #include <sd/sd.h>
 #include <ext2/ext2fs.h>
@@ -67,20 +68,12 @@ static void run_before_vfs(const char* cmd) {
 		}
 	}
 	else
-		proc_wait_ready(pid);
+		ipc_wait_ready(pid);
 	out("[ok]\n");
 }
 
-static const char* get_arch_initrd(void) {
-	static char rd[FS_FULL_NAME_MAX] = "";
-	sys_info_t sysinfo;
-	syscall1(SYS_GET_SYS_INFO, (int32_t)&sysinfo);
-	snprintf(rd, FS_FULL_NAME_MAX-1, "/etc/arch/%s/init.rd", sysinfo.machine);
-	return rd;
-}
-
 static void run_init(const char* init_file) {
-	if(vfs_access(init_file) != 0) {
+	if(access(init_file, R_OK) != 0) {
 		out("init: init file '%s' missed! \n", init_file);
 		return;
 	}
@@ -88,6 +81,7 @@ static void run_init(const char* init_file) {
 	int pid = fork();
 	if(pid == 0) {
 		setuid(0);
+		setgid(0);
 		char cmd[FS_FULL_NAME_MAX];
 		snprintf(cmd, FS_FULL_NAME_MAX-1, "/bin/shell -initrd %s", init_file);
 		out("\ninit: loading '%s' ... \n", init_file);
@@ -129,7 +123,7 @@ int main(int argc, char** argv) {
 
 	switch_root();
 	while(true) {
-		proc_block(getpid(), (uint32_t)main);
+		proc_block_by(getpid(), (uint32_t)main);
 	}
 	return 0;
 }

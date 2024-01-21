@@ -2,15 +2,15 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/vfs.h>
-#include <sys/core.h>
-#include <sys/ipc.h>
-#include <sys/proc.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/core.h>
+#include <ewoksys/ipc.h>
+#include <ewoksys/proc.h>
 #include <vprintf.h>
-#include <sys/mstr.h>
+#include <ewoksys/mstr.h>
 #include <fcntl.h>
-#include <sys/klog.h>
-#include <sys/syscall.h>
+#include <ewoksys/klog.h>
+#include <ewoksys/syscall.h>
 #include "shell.h"
 
 static int cd(const char* dir) {
@@ -59,8 +59,14 @@ static int cd(const char* dir) {
 		printf("[%s] not exist!\n", dir);	
 	else if(info.type != FS_TYPE_DIR)
 		printf("[%s] is not a directory!\n", dir);	
-	else 
-		chdir(cwd);
+	else if(chdir(cwd) != 0) {
+		if(errno == ENOENT)
+			printf("[%s] not exist!\n", dir);	
+		else if(errno == EPERM)
+			printf("[%s] access denied!\n", dir);	
+		else
+			printf("[%s] denied!\n", dir);	
+	}
 	return 0;
 }
 
@@ -95,7 +101,7 @@ static void export_set(const char* arg) {
 	char* v = strchr(arg, '=');
 	if(v == NULL)
 		return;
-	strncpy(name, arg, v-arg);
+	sstrncpy(name, arg, v-arg);
 	name[v-arg] = 0;
 
 	setenv(name, (v+1));

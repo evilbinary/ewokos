@@ -6,7 +6,6 @@ KERNEL_H = \
 	$(KERNEL_DIR)/include/interrupt.h \
 	$(KERNEL_DIR)/include/sysinfo.h \
 	$(KERNEL_DIR)/include/kevent.h \
-	$(KERNEL_DIR)/include/shmflag.h \
 	$(KERNEL_DIR)/include/procinfo.h
 
 kernel_heads:
@@ -16,23 +15,24 @@ kernel_heads:
 
 #SD = $(ROOT_DIR)/root.ext2
 SD = build/root.ext2
+TMP = build/tmp
 sd: 
 	@echo "\n====building ext2 format sdcard image===="
-	sudo rm -fr build/tmp
-	mkdir -p build/tmp
+	sudo rm -fr ${TMP}
+	mkdir -p  ${TMP}
 #256M ext2 sd
 	dd if=/dev/zero of=${SD} bs=1k count=256k
 #make ext2 fs with: block_size=1024 inode_size=128
 	mke2fs -b 1024 -I 128 ${SD}
 
 #mkdir tmp dir and mount sdimage to tmp
-	sudo fuse-ext2 -o force,rw+ ${SD} build/tmp
+	sudo fuse-ext2 -o force,rw+ ${SD} ${TMP}
 
 #cp dirs and files
-	sudo cp -r $(ROOT_DIR)/build/$(HW)/* build/tmp
+	sudo cp -r $(ROOT_DIR)/build/$(HW)/* ${TMP}
 
 #umount tmp
-	sudo umount build/tmp
+	sudo umount ${TMP}
 	@echo "==== ext2 format sdcard image created  ====\n"
-	rm -r build/tmp
+	rm -r ${TMP} 
 

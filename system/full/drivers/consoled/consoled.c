@@ -3,18 +3,17 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/vfs.h>
+#include <ewoksys/vfs.h>
 #include <console/console.h>
 #include <fb/fb.h>
 #include <ttf/ttf.h>
-#include <sys/shm.h>
-#include <sys/vdevice.h>
+#include <ewoksys/vdevice.h>
 #include <display/display.h>
 #include <upng/upng.h>
-#include <sys/syscall.h>
+#include <ewoksys/syscall.h>
 #include <sysinfo.h>
 #include <sconf/sconf.h>
-#include <sys/klog.h>
+#include <ewoksys/klog.h>
 #include <font/font.h>
 
 typedef struct {
@@ -137,7 +136,7 @@ static void flush(fb_console_t* console) {
 
 static int console_write(int fd, 
 		int from_pid,
-		uint32_t node,
+		fsinfo_t* node,
 		const void* buf,
 		int size,
 		int offset,
@@ -185,7 +184,7 @@ int main(int argc, char** argv) {
 	dev.dev_cntl = console_dev_cntl;
 	dev.extra_data = &_console;
 
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0666);
 	close_console(&_console);
 	return 0;
 }

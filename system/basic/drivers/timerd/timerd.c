@@ -2,13 +2,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/vfs.h>
-#include <sys/proc.h>
-#include <sys/vdevice.h>
-#include <sys/timer.h>
-#include <sys/syscall.h>
-#include <sys/interrupt.h>
-#include <sys/kernel_tic.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/proc.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/timer.h>
+#include <ewoksys/syscall.h>
+#include <ewoksys/interrupt.h>
+#include <ewoksys/kernel_tic.h>
 
 typedef struct interrupt_st {
 	uint32_t id;
@@ -22,6 +22,7 @@ typedef struct interrupt_st {
 } interrupt_t;
 static interrupt_t* _intr_list = NULL;
 static uint32_t _id = 0;
+static uint32_t _min_timer_usec = 0;
 
 static int32_t interrupt_remove(int32_t pid, uint32_t id) {
 	interrupt_t* p = _intr_list;
@@ -64,6 +65,21 @@ static int32_t interrupt_setup(int32_t pid, uint32_t timer_usec, uint32_t entry,
 	return intr->id;
 }
 
+static void update_timer_intr(void) {
+	interrupt_t* intr = _intr_list;
+	uint32_t min_usec = 0;
+	while(intr != NULL) {
+		if(min_usec == 0 || min_usec > intr->timer_usec)
+			min_usec = intr->timer_usec;
+		intr = intr->next;
+	}
+
+	if(min_usec != _min_timer_usec) {
+		_min_timer_usec = min_usec;
+		syscall1(SYS_SET_TIMER_INTR_USEC, min_usec);
+	}
+}
+
 static void interrupt_handle(uint32_t interrupt, uint32_t data) {
 	(void)interrupt;
 	(void)data;
@@ -93,6 +109,7 @@ static void interrupt_handle(uint32_t interrupt, uint32_t data) {
 
 			if(prev != NULL)
 				prev->next = next;
+			update_timer_intr();
 		}
 		intr = next;
 	}
@@ -115,10 +132,12 @@ static int timer_dcntl(int from_pid, int cmd, proto_t* in, proto_t* ret, void* p
 		uint32_t data = (uint32_t)proto_read_int(in);
 		uint32_t id = interrupt_setup(from_pid, usec, entry, data);
 		PF->addi(ret, id);
+		update_timer_intr();
 	}	
 	else if(cmd == TIMER_REMOVE) { 
 		uint32_t id = (uint32_t)proto_read_int(in);
 		interrupt_remove(from_pid, id);
+		update_timer_intr();
 		if(_intr_list == NULL)
 			sys_interrupt_setup(SYS_INT_TIMER0, 0, 0);
 	}
@@ -130,12 +149,13 @@ int main(int argc, char** argv) {
 	const char* mnt_point = argc > 1 ? argv[1]: "/dev/timer";
 	_intr_list = NULL;
 	_id = 1;
+	_min_timer_usec = 0;
 
 	vdevice_t dev;
 	memset(&dev, 0, sizeof(vdevice_t));
 	strcpy(dev.name, "timer");
 	dev.dev_cntl = timer_dcntl;
 
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0444);
 	return 0;
 }

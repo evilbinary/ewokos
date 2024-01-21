@@ -1,9 +1,9 @@
 #include <arch/bcm283x/gpio.h>
-#include <sys/vdevice.h>
-#include <sys/syscall.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/syscall.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/dma.h>
+#include <ewoksys/dma.h>
 
 #define PWM_BASE        (_mmio_base + 0x20C000) /* PWM0 register base address on RPi */
 #define CLOCK_BASE      (_mmio_base + 0x101000)
@@ -162,7 +162,7 @@ static void playaudio_cpu(uint8_t* data, uint32_t size) {
 }
 */
 
-static int sound_write(int fd, int from_pid, uint32_t node,
+static int sound_write(int fd, int from_pid, fsinfo_t* node,
 		const void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)node;
@@ -184,6 +184,6 @@ int main(int argc, char** argv) {
 	memset(&dev, 0, sizeof(vdevice_t));
 	strcpy(dev.name, "sound");
 	dev.write = sound_write;
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0666);
 	return 0;
 }

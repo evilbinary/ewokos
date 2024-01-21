@@ -2,14 +2,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/vfs.h>
+#include <ewoksys/vfs.h>
 #include <sysinfo.h>
-#include <sys/syscall.h>
-#include <sys/vdevice.h>
-#include <sys/charbuf.h>
-#include <sys/mmio.h>
-#include <sys/proc.h>
-#include <sys/ipc.h>
+#include <ewoksys/syscall.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/charbuf.h>
+#include <ewoksys/mmio.h>
+#include <ewoksys/proc.h>
+#include <ewoksys/ipc.h>
 #include <arch/bcm283x/mini_uart.h>
 #include <arch/bcm283x/pl011_uart.h>
 
@@ -17,7 +17,7 @@ static charbuf_t _TxBuf;
 static charbuf_t _RxBuf;
 static bool _mini_uart;
 
-static int uart_read(int fd, int from_pid, uint32_t node, 
+static int uart_read(int fd, int from_pid, fsinfo_t* node, 
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)from_pid;
@@ -35,7 +35,7 @@ static int uart_read(int fd, int from_pid, uint32_t node,
 	return (i==0)?ERR_RETRY_NON_BLOCK:i;
 }
 
-static int uart_write(int fd, int from_pid, uint32_t node,
+static int uart_write(int fd, int from_pid, fsinfo_t* node,
 		const void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)node;
@@ -109,6 +109,6 @@ int main(int argc, char** argv) {
 	dev.write = uart_write;
 	dev.loop_step = loop;
 
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0666);
 	return 0;
 }

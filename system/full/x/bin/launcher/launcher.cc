@@ -4,9 +4,9 @@
 #include <sconf/sconf.h>
 #include <upng/upng.h>
 #include <x++/X.h>
-#include <sys/keydef.h>
-#include <sys/klog.h>
-#include <sys/proc.h>
+#include <ewoksys/keydef.h>
+#include <ewoksys/klog.h>
+#include <ewoksys/proc.h>
 #include <font/font.h>
 #include <dirent.h>
 #include <Widget/ListView.h>
@@ -210,7 +210,7 @@ public:
 		str_t* ret = NULL;
 		if(theme[0] != 0) {
 			ret = str_new(x_get_theme_fname(X_THEME_ROOT, appName, "icon.png"));
-			if(vfs_access(ret->cstr) == 0)
+			if(access(ret->cstr, R_OK) == 0)
 				return ret;
 			str_free(ret);
 		}

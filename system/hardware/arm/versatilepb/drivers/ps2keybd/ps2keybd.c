@@ -2,16 +2,16 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/vfs.h>
-#include <sys/klog.h>
-#include <sys/ipc.h>
-#include <sys/vdevice.h>
-#include <sys/mmio.h>
-#include <sys/charbuf.h>
-#include <sys/syscall.h>
-#include <sys/proc.h>
-#include <sys/interrupt.h>
-#include <sys/timer.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/klog.h>
+#include <ewoksys/ipc.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/mmio.h>
+#include <ewoksys/charbuf.h>
+#include <ewoksys/syscall.h>
+#include <ewoksys/proc.h>
+#include <ewoksys/interrupt.h>
+#include <ewoksys/timer.h>
 
 #define KCNTL 0x00
 #define KSTAT 0x04
@@ -98,7 +98,7 @@ static int32_t keyb_handle(uint8_t scode) {
 
 static charbuf_t _buffer;
 
-static int keyb_read(int fd, int from_pid, uint32_t node, 
+static int keyb_read(int fd, int from_pid, fsinfo_t* node, 
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)from_pid;
@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
 	//dev.loop_step = loop;
 
 	uint32_t tid = timer_set(5000, timer_handler);
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0444);
 	timer_remove(tid);
 	return 0;
 }

@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/vfs.h>
-#include <sys/vdevice.h>
-#include <sys/mmio.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/mmio.h>
 
 
 #define MOUSE_CR 0x00
@@ -162,7 +162,7 @@ int32_t mouse_handler(mouse_info_t *info) {
 	return -1;
 }
 
-static int mouse_read(int fd, int from_pid, uint32_t node,
+static int mouse_read(int fd, int from_pid, fsinfo_t* node,
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)from_pid;
@@ -192,6 +192,6 @@ int main(int argc, char** argv) {
 	strcpy(dev.name, "mouse");
 	dev.read = mouse_read;
 
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0444);
 	return 0;
 }

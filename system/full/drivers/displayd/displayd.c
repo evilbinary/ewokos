@@ -3,8 +3,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/vfs.h>
-#include <sys/vdevice.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/vdevice.h>
 #include <display/display.h>
 
 #define DEV_NAME_MAX 64
@@ -20,7 +20,7 @@ typedef struct DISP_st {
 static void add_disp(display_man_t* display_man, const char* dev) {
 	if(display_man->display_num >= DISP_MAX)
 		return;
-	strncpy(display_man->displays[display_man->display_num].fb_dev, dev, DEV_NAME_MAX-1);
+	sstrncpy(display_man->displays[display_man->display_num].fb_dev, dev, DEV_NAME_MAX-1);
 	display_man->display_num++;
 }
 
@@ -64,6 +64,6 @@ int main(int argc, char** argv) {
 	dev.dev_cntl = DISP_dev_cntl;
 	dev.extra_data = &display_man;
 
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0444);
 	return 0;
 }

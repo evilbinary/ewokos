@@ -1,7 +1,7 @@
 #include <unistd.h>
 #include <fcntl.h>
-#include <sys/vfs.h>
-#include <sys/fsinfo.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/fsinfo.h>
 
 int lseek(int fd, uint32_t offset, int whence) {
 	if(whence == SEEK_CUR) {
@@ -14,7 +14,7 @@ int lseek(int fd, uint32_t offset, int whence) {
 		fsinfo_t info;
 		int cur = 0;
 		if(vfs_get_by_fd(fd, &info) == 0)
-			cur = info.size;
+			cur = info.stat.size;
 		offset += cur;
 	}
 	return vfs_seek(fd, offset);

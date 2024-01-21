@@ -2,14 +2,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/vfs.h>
-#include <sys/vdevice.h>
-#include <sys/charbuf.h>
-#include <sys/mmio.h>
-#include <sys/proc.h>
-#include <sys/ipc.h>
-#include <sys/interrupt.h>
-#include <sys/interrupt.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/charbuf.h>
+#include <ewoksys/mmio.h>
+#include <ewoksys/proc.h>
+#include <ewoksys/ipc.h>
+#include <ewoksys/interrupt.h>
+#include <ewoksys/interrupt.h>
 
 #include "ms_serial.h"
 
@@ -18,7 +18,7 @@
 #define UART_MULTI_REG8(_x_)  ((uint8_t volatile *)(BASE))[((_x_) * 4) - ((_x_) & 1)]
 
 
-static int uart_read(int fd, int from_pid, uint32_t node, 
+static int uart_read(int fd, int from_pid, fsinfo_t* node, 
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)from_pid;
@@ -37,7 +37,7 @@ static int uart_read(int fd, int from_pid, uint32_t node,
     return 1;
 }
 
-static int uart_write(int fd, int from_pid, uint32_t node,
+static int uart_write(int fd, int from_pid, fsinfo_t* node,
 		const void* buf, int size, int offset, void* p) {
 	(void)fd;
 	(void)node;
@@ -64,6 +64,6 @@ int main(int argc, char** argv) {
 	dev.read = uart_read;
 	dev.write = uart_write;
 
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0666);
 	return 0;
 }

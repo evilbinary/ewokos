@@ -20,9 +20,14 @@ builtin_apps:
 	cd dump;make
 	cd kill;make
 	cd rm;make
+	cd chmod;make
+	cd chown;make
+	cd whoami;make
 	cd mkdir;make
 	cd grep;make
 	cd rx;make
+	cd elfinfo;make
+	cd httpd;make 
 
 clean:
 	cd cp;make clean
@@ -43,6 +48,11 @@ clean:
 	cd dump;make clean
 	cd kill;make clean
 	cd rm;make clean
+	cd chmod;make clean
+	cd chown;make clean
 	cd mkdir;make clean
 	cd grep;make clean
 	cd rx;make clean
+	cd elfinfo;make clean
+	cd httpd;make clean
+	cd whoami;make clean

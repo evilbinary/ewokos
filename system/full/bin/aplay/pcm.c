@@ -7,8 +7,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/types.h>
-#include <sys/klog.h>
-#include <sys/vdevice.h>
+#include <ewoksys/klog.h>
+#include <ewoksys/vdevice.h>
 
 #include "pcm.h"
 #include "utils.h"
@@ -130,7 +130,7 @@ struct pcm* pcm_open(const char *name, struct pcm_config *config)
 		return NULL;
 	}
 
-	strncpy(pcm->name, name, 32);
+	sstrncpy(pcm->name, name, 32);
 	memcpy(&pcm->config, config, sizeof(struct pcm_config));
 	pcm->framesize = config->channels * config->bit_depth / 8;
 

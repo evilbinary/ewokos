@@ -1,15 +1,14 @@
 #include <x/xwin.h>
 #include <x/x.h>
-#include <sys/shm.h>
-#include <sys/ipc.h>
-#include <sys/vfs.h>
-#include <sys/syscall.h>
-#include <sys/thread.h>
-#include <sys/proc.h>
-#include <sys/vdevice.h>
-#include <sys/cmain.h>
-#include <sys/basic_math.h>
-#include <sys/proc.h>
+#include <ewoksys/ipc.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/syscall.h>
+#include <ewoksys/thread.h>
+#include <ewoksys/proc.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/cmain.h>
+#include <ewoksys/basic_math.h>
+#include <ewoksys/proc.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -36,7 +35,7 @@ static int x_get_event(int xserv_pid, xevent_t* ev, bool block) {
 	PF->clear(&out);
 
 	if(res != 0 && block) {
-		proc_block(xserv_pid, X_EVT_BLOCK_EVT);
+		proc_block_by(xserv_pid, X_EVT_BLOCK_EVT);
 	}
 
 	return res;
@@ -70,6 +69,11 @@ static void sig_stop(int sig_no, void* p) {
 	(void)sig_no;
 	x_t* x = (x_t*)p;
 	x->terminated = true;
+}
+
+void x_terminate(x_t* x) {
+	x->terminated = true;
+	proc_wakeup_pid(getpid(), 0);
 }
 
 void  x_init(x_t* x, void* data) {
@@ -125,7 +129,7 @@ const char* x_get_theme(void) {
 	if(dev_cntl("/dev/x", X_DCNTL_GET_THEME, NULL, &out) == 0) {
 		const char* t = proto_read_str(&out);
 		if(t != NULL)
-			strncpy(theme, t, 127);
+			sstrncpy(theme, t, 127);
 	}
 	return theme;
 }

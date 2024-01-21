@@ -5,12 +5,12 @@
 #include <string.h>
 #include <console/console.h>
 #include <sconf/sconf.h>
-#include <sys/vfs.h>
-#include <sys/keydef.h>
-#include <sys/vdevice.h>
-#include <sys/klog.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/keydef.h>
+#include <ewoksys/vdevice.h>
+#include <ewoksys/klog.h>
 #include <ttf/ttf.h>
-#include <sys/basic_math.h>
+#include <ewoksys/basic_math.h>
 #include <x++/X.h>
 
 using namespace Ewok;
@@ -130,7 +130,7 @@ protected:
 
 static int console_write(int fd, 
 		int from_pid,
-		uint32_t node,
+		fsinfo_t* node,
 		const void* buf,
 		int size,
 		int offset,
@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
 	dev.extra_data = &xwin;
 	dev.loop_step = try_hide;
 
-	device_run(&dev, mnt_point, FS_TYPE_CHAR);
+	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0666);
 	xwin.close();
 	return 0;
 }

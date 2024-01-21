@@ -1,9 +1,9 @@
 #include <stddef.h>
 #include <unistd.h>
-#include <sys/syscall.h>
-#include <sys/ipc.h>
-#include <sys/proc.h>
-#include <sys/core.h>
+#include <ewoksys/syscall.h>
+#include <ewoksys/ipc.h>
+#include <ewoksys/proc.h>
+#include <ewoksys/core.h>
 
 int chdir(const char* path) {
 	proto_t in, out;
@@ -13,6 +13,8 @@ int chdir(const char* path) {
 	PF->clear(&in);
 	if(res == 0) {
 		res = proto_read_int(&out);
+		if(res != 0)
+			errno = proto_read_int(&out);
 	}
 	PF->clear(&out);
 	return res;

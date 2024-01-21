@@ -1,16 +1,18 @@
 #ifndef STDIO_H
 #define STDIO_H
 
-#include <sys/ewokdef.h>
+#include <ewoksys/ewokdef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#define EOF (-1)
 
 void printf(const char *format, ...);
 void dprintf(int fd, const char *format, ...);
 int sprintf(char *str, const char *fmt, ...);
+char *sstrncpy(char *dst, const char *src, size_t n);
 int snprintf(char *target, int size, const char *format, ...);
 
 int  getch(void);
