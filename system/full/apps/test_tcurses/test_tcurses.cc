@@ -53,8 +53,8 @@ class TestX : public XWin {
 	}
 
 	gpos_t getPos(graph_t* g, uint32_t at) {
-		uint32_t cx = at % tc.cols;
-		uint32_t cy = at / tc.cols;
+		uint32_t cx = 0, cy = 0;
+		tcurses_pos_by_at(&tc, at, &cx, &cy);
 		return getPos(g, cx, cy);
 	}
 
@@ -76,7 +76,7 @@ class TestX : public XWin {
 
 		uint32_t i = 0;
 		while(i < tc.cols*tc.rows) {
-			if(tc.content[i].c != 0) {
+			if(tc.content[i].c != 0 && tc.content[i].c != '\n') {
 				gpos_t pos = getPos(g, i);
 				graph_draw_char_font_fixed(g, pos.x, pos.y, tc.content[i].c, font, tc.content[i].color, w, 0);
 			}
@@ -100,8 +100,7 @@ class TestX : public XWin {
 		if(at < 0)
 			at = 0;
 		else if(at == size)
-			at = o_at-1;
-
+			at = tcurses_tail(&tc);
 		tcurses_move_at(&tc, at);
 	}
 
@@ -144,23 +143,27 @@ protected:
 				tcurses_move(&tc, tc.cols);
 				skip(true);
 			}
-			else if(c == KEY_ENTER) {
-				tcurses_set(&tc, c, getColor(c));
+			else if(c == KEY_ENTER || c == '\n') {
+				c = '\n';
+				tcurses_insert(&tc, c, getColor(c));
 				tcurses_move_to(&tc, 0, tc.curs_y+1);
 			}	
 			else if(c == KEY_BACKSPACE ||
 					c == CONSOLE_LEFT) {
-				skip(true);
-				tcurses_set(&tc, 0, getColor(c));
+				if(tcurses_at(&tc) > 0) {
+					tcurses_move(&tc, -1);
+					skip(true);
+					tcurses_del(&tc);
+				}
 			}
 			else if(c == '\t') {
-				tcurses_set(&tc, ' ', getColor(c));
+				tcurses_insert(&tc, ' ', getColor(c));
 				tcurses_move(&tc, 1);
-				tcurses_set(&tc, ' ', getColor(c));
+				tcurses_insert(&tc, ' ', getColor(c));
 				tcurses_move(&tc, 1);
 			}	
 			else  {
-				tcurses_set(&tc, c, getColor(c));
+				tcurses_insert(&tc, c, getColor(c));
 				tcurses_move(&tc, 1);
 			}	
 			repaint();
