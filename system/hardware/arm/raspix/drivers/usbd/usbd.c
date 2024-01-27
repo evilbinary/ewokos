@@ -2,8 +2,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/errno.h>
 #include <ewoksys/vdevice.h>
 #include <ewoksys/syscall.h>
+#include <ewoksys/vfs.h>
 #include <ewoksys/mmio.h>
 #include <ewoksys/dma.h>
 #include <usbd/usbd.h>
@@ -26,15 +28,15 @@ void LogPrint(const char* message, uint32_t messageLength) {
 
 static void usb_host_init(uint32_t v_mmio_base) {
   UsbInitialise(v_mmio_base);
-  usleep(100000);
+  proc_usleep(100000);
   UsbCheckForChange();
-  usleep(100000);
+  proc_usleep(100000);
   UsbCheckForChange();
-  usleep(100000);
+  proc_usleep(100000);
   UsbCheckForChange();
-  usleep(100000);
+  proc_usleep(100000);
   UsbCheckForChange();
-  usleep(100000);
+  proc_usleep(100000);
   UsbCheckForChange();
 }
 
@@ -49,7 +51,7 @@ static int usb_step(void* p) {
 	//klog("detecting...\n");
     if(!TouchPersent()){
        UsbCheckForChange(); 
-       usleep(100000);
+       proc_usleep(100000);
        return 0;
     }
 
@@ -77,7 +79,7 @@ static int usb_step(void* p) {
             proc_wakeup(RW_BLOCK_EVT);
         }
     }
-    usleep(15000);
+    proc_usleep(15000);
 	return 0;
 }
 

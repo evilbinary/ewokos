@@ -3,12 +3,13 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
-#include <console/console.h>
+#include <gterminal/gterminal.h>
 #include <sconf/sconf.h>
 #include <ewoksys/vfs.h>
 #include <ewoksys/keydef.h>
 #include <ewoksys/vdevice.h>
 #include <ewoksys/klog.h>
+#include <ewoksys/proc.h>
 #include <ttf/ttf.h>
 #include <ewoksys/basic_math.h>
 #include <x++/X.h>
@@ -22,7 +23,7 @@ typedef struct {
 
 class XConsoled : public XWin {
 	conf_t conf;
-	console_t console;
+	gterminal_t terminal;
 	int32_t mouse_last_y;
 	uint32_t hide_count;
 	uint32_t auto_hide;
@@ -34,15 +35,15 @@ public:
 		auto_hide = 6; //auto hide after 6 sec
 		height = 0;
 		width = 0;
-		console_init(&console);
+		gterminal_init(&terminal);
 	}
 
 	~XConsoled() {
-		console_close(&console);
+		gterminal_close(&terminal);
 	}
 
 	void tryHide() {
-		usleep(100000); //count every 100 ms
+		proc_usleep(100000); //count every 100 ms
 		if(auto_hide == 0) //never hide
 			return;
 			
@@ -75,21 +76,21 @@ public:
 
 		const char* v = sconf_get(sconf, "bg_color");
 		if(v[0] != 0) 
-			conf.bg_color = strtol(v, NULL, 16);
+			conf.bg_color = strtoul(v, NULL, 16);
 
 		v = sconf_get(sconf, "fg_color");
 		if(v[0] != 0) 
-			conf.fg_color = strtol(v, NULL, 16);
+			conf.fg_color = strtoul(v, NULL, 16);
 
 		uint32_t font_size = 16;
 		v = sconf_get(sconf, "font_size");
 		if(v[0] != 0) 
 			font_size = atoi(v);
-		console.textview.font_size = font_size;
+		terminal.font_size = font_size;
 
 		v = sconf_get(sconf, "font_fixed");
 		if(v[0] != 0) 
-			console.textview.font_fixed = atoi(v);
+			terminal.font_fixed = atoi(v);
 		
 		v = sconf_get(sconf, "auto_hide");
 		if(v[0] != 0) 
@@ -99,7 +100,7 @@ public:
 		if(v[0] == 0) 
 			v = DEFAULT_SYSTEM_FONT;
 		
-		console.textview.font = font_new(v, font_size, true);
+		terminal.font = font_new(v, font_size, true);
 
 		v = sconf_get(sconf, "height");
 		if(v[0] != 0) 
@@ -110,21 +111,24 @@ public:
 
 		sconf_free(sconf);
 
-		console.textview.fg_color = conf.fg_color;
-		console.textview.bg_color = conf.bg_color;
+		terminal.fg_color = conf.fg_color;
+		terminal.bg_color = conf.bg_color;
 		return true;
 	}
 
 	void put(const char* buf, int size) {
-		console_put_string(&console, buf, size);
+		gterminal_put(&terminal, buf, size);
 		repaint();
 	}
 protected:
+	void onResize() {
+		xinfo_t xinfo;
+		getInfo(xinfo);
+		gterminal_resize(&terminal, xinfo.wsr.w, xinfo.wsr.h);
+	}
+	
 	void onRepaint(graph_t* g) {
-		if(console.textview.w != g->w || console.textview.h != g->h) {
-			console_reset(&console, g->w, g->h);
-		}
-		console_refresh(&console, g);
+		gterminal_paint(&terminal, g);
 	}
 };
 

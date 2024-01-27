@@ -114,7 +114,7 @@ static int32_t read_config(x_t* x, const char* fname) {
 
 	const char* v = sconf_get(conf, "win_move_alpha");
 	if(v[0] != 0) 
-		x->config.win_move_alpha = strtol(v, NULL, 16);
+		x->config.win_move_alpha = strtoul(v, NULL, 16);
 
 	v = sconf_get(conf, "fps");
 	if(v[0] != 0) 
@@ -130,11 +130,11 @@ static int32_t read_config(x_t* x, const char* fname) {
 	
 	v = sconf_get(conf, "xwm");
 	if(v[0] != 0) 
-		strncpy(x->config.xwm, v, 127);
+		sstrncpy(x->config.xwm, v, 127);
 	
 	v = sconf_get(conf, "theme");
 	if(v[0] != 0)
-		strncpy(x->config.theme, v, 127);
+		sstrncpy(x->config.theme, v, 127);
 
 	v = sconf_get(conf, "cursor");
 	if(strcmp(v, "touch") == 0)
@@ -1456,7 +1456,7 @@ int xserver_step(void* p) {
 		x_repaint(x, i);
 	}
 	ipc_enable();
-	usleep(1000000/x->config.fps);
+	proc_usleep(1000000/x->config.fps);
 	return 0;
 }
 
@@ -1477,7 +1477,7 @@ int main(int argc, char** argv) {
 		pid = fork();
 		if(pid == 0) {
 			setenv("XTHEME", x.config.theme);
-			exec(x.config.xwm);
+			proc_exec(x.config.xwm);
 		}
 		ipc_wait_ready(pid);
 		x.xwm_pid = pid;

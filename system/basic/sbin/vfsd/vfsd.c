@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/errno.h>
 #include <ewoksys/ipc.h>
 #include <ewoksys/klog.h>
 #include <ewoksys/proc.h>
@@ -261,7 +262,7 @@ static const char* fullname(vfs_node_t* node) {
 	}
 
 	static char ret[FS_FULL_NAME_MAX];
-	strncpy(ret, CS(s1), FS_FULL_NAME_MAX-1);
+	sstrncpy(ret, CS(s1), FS_FULL_NAME_MAX-1);
 	str_free(s1);
 	return ret;
 }
@@ -1111,7 +1112,7 @@ int main(int argc, char** argv) {
 			//ipc_disable();
 			//check_procs();
 			//ipc_enable();
-			//usleep(3000);
+			//proc_usleep(3000);
 		}
 	}
 	return 0;

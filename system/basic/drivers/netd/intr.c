@@ -40,7 +40,7 @@ intr_request_irq(unsigned int irq, int (*handler)(unsigned int irq, void *dev), 
     entry->irq = irq;
     entry->handler = handler;
     entry->flags = flags;
-    strncpy(entry->name, name, sizeof(entry->name)-1);
+    sstrncpy(entry->name, name, sizeof(entry->name)-1);
     entry->dev = dev;
     entry->next = irq_vec;
     irq_vec = entry;
@@ -88,7 +88,7 @@ void* intr_thread(void* p) {
                }
            }
        }
-       usleep(1000);
+       proc_usleep(1000);
     }
     return 0;
 }

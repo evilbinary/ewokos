@@ -1,6 +1,6 @@
 #include <unistd.h>
 #include <stdio.h>
-#include <vprintf.h>
+
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
@@ -14,7 +14,7 @@ static inline const char* get_show_name(const char* name, int32_t type) {
 	else if(type == DT_BLK || type == DT_CHR) 
 		snprintf(ret, 127, "*%s", name);
 	else
-		strncpy(ret, name, 127);
+		sstrncpy(ret, name, 127);
 	return ret;
 }
 

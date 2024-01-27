@@ -89,8 +89,9 @@ class LauncherView: public ListView {
 		}
 
 		int pid = fork();
-		if(pid == 0)
-			exec(item->fname->cstr);
+		if(pid == 0) {
+			proc_exec(item->fname->cstr); 
+		}
 		else {
 			item->runPid = pid;
 			item->runPidUUID = proc_get_uuid(pid);
@@ -188,15 +189,15 @@ public:
 
 		v = sconf_get(conf, "title_color");
 		if(v[0] != 0)
-			titleColor = strtol(v, NULL, 16);
+			titleColor = strtoul(v, NULL, 16);
 
 		v = sconf_get(conf, "bg_color");
 		if(v[0] != 0)
-			bgColor = strtol(v,NULL, 16);
+			bgColor = strtoul(v,NULL, 16);
 
 		v = sconf_get(conf, "icon_selected_color");
 		if(v[0] != 0)
-			selectedColor = strtol(v,NULL, 16);
+			selectedColor = strtoul(v,NULL, 16);
 		sconf_free(conf);
 
 		itemsInfo.itemSize.h = fontSize + iconSize + titleMargin;
@@ -305,7 +306,7 @@ public:
 static void check_proc(void* p) {
 	Launcher* xwin = (Launcher*)p;
 	xwin->checkProc();
-	usleep(20000);
+	proc_usleep(20000);
 }
 
 int main(int argc, char* argv[]) {

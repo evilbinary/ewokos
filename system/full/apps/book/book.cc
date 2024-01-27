@@ -7,6 +7,7 @@
 #include <font/font.h>
 #include <x++/X.h>
 #include <ewoksys/keydef.h>
+#include <ewoksys/proc.h>
 #include <string.h>
 #include <ewoksys/utf8unicode.h>
 
@@ -144,10 +145,10 @@ public:
 
 		v = sconf_get(conf, "bg_color");
 		if(v[0] != 0)
-			bgColor = strtol(v, NULL,16);
+			bgColor = strtoul(v, NULL,16);
 		v = sconf_get(conf, "fg_color");
 		if(v[0] != 0)
-			fgColor = strtol(v, NULL,16);
+			fgColor = strtoul(v, NULL,16);
 
 		sconf_free(conf);
 		return true;
@@ -159,7 +160,7 @@ static void loop(void* p) {
 	//Book* xwin = (Book*)p;
 	// xwin->readPage();
 	// xwin->repaint();
-	usleep(100000);
+	proc_usleep(100000);
 }
 
 int main(int argc, char* argv[]) {

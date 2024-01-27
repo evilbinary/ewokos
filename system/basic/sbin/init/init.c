@@ -5,7 +5,7 @@
 #include <fcntl.h>
 #include <ewoksys/syscall.h>
 #include <ewoksys/vfs.h>
-#include <vprintf.h>
+
 #include <sysinfo.h>
 #include <ewoksys/klog.h>
 #include <ewoksys/ipc.h>
@@ -70,7 +70,7 @@ static void run_init(const char* init_file) {
 		char cmd[FS_FULL_NAME_MAX];
 		snprintf(cmd, FS_FULL_NAME_MAX-1, "/bin/shell -initrd %s", init_file);
 		klog("\ninit: loading '%s' ... \n", init_file);
-		if(exec(cmd) != 0) {
+		if(proc_exec(cmd) != 0) {
 			klog("[failed]!\n");
 			exit(-1);
 		}
@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
 	(void)argc;
 	(void)argv;
 
-	if(getuid() >= 0) {
+	if(((int16_t)getuid()) >= 0) {
 		klog("process 'init' can only loaded by kernel!\n");
 		return -1;
 	}

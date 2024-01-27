@@ -44,7 +44,7 @@ static const char* get_owner(procinfo_t* proc) {
 	static char name[SESSION_USER_MAX+1];
 
 	if(session_get_by_uid(proc->uid, &info) == 0)
-		strncpy(name, info.user, SESSION_USER_MAX);
+		sstrncpy(name, info.user, SESSION_USER_MAX);
 	else
 		snprintf(name, SESSION_USER_MAX, "%d", proc->uid);
 
@@ -156,13 +156,13 @@ int main(int argc, char* argv[]) {
 				printf("\n");
 		}
 	}
-	printf("\nmemory: total %d MB, free %d MB, shm %d MB\n", t_mem, fr_mem, shm_mem);
+	printf("\n\033[1mmemory: total %d MB, free %d MB, shm %d MB\n", t_mem, fr_mem, shm_mem);
 	printf("cpu idle:");
 	for(uint32_t i=0; i<sys_info.cores; i++) {
 		int idle = core_idle[i]/10000;
 		printf("  %d%%", idle > 100 ? 100 : idle);
 	}
-	printf("\n");
+	printf("\033[0m\n");
 
 	if(procs != NULL)
 		free(procs);

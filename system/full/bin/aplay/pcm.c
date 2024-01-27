@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
-#include <errno.h>
+#include <sys/errno.h>
 #include <sys/types.h>
 #include <ewoksys/klog.h>
 #include <ewoksys/vdevice.h>
@@ -130,7 +130,7 @@ struct pcm* pcm_open(const char *name, struct pcm_config *config)
 		return NULL;
 	}
 
-	strncpy(pcm->name, name, 32);
+	sstrncpy(pcm->name, name, 32);
 	memcpy(&pcm->config, config, sizeof(struct pcm_config));
 	pcm->framesize = config->channels * config->bit_depth / 8;
 
@@ -215,7 +215,7 @@ int wait_avail(struct pcm *pcm, int *avail, int time_out_ms)
 		if (pcm->hook != NULL) {
 			pcm->hook(pcm->private);
 		} else {
-			usleep(SLEEP_TIME_MS * 1000); /* Try again until timeout */
+			proc_usleep(SLEEP_TIME_MS * 1000); /* Try again until timeout */
 		}
 	}
 

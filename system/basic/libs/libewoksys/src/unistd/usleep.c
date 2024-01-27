@@ -1,11 +1,6 @@
 #include <unistd.h>
-#include <ewoksys/syscall.h>
+#include <ewoksys/proc.h>
 
-int usleep(unsigned int usecs) {
-	if(usecs == 0)
-		syscall0(SYS_YIELD);
-	else
-		syscall1(SYS_USLEEP, usecs);
-	return 0;
+int usleep(uint32_t usec) {
+	proc_usleep(usec);
 }
-

@@ -56,7 +56,7 @@ const char* cmain_get_work_dir(void) {
 	int i = strlen(_argv0) - 1;
 	while(i >= 0) {
 		if(_argv0[i] == '/') {
-			strncpy(ret, _argv0, i);
+			sstrncpy(ret, _argv0, i);
 			ret[i] = 0;
 			return ret;
 		}
@@ -76,28 +76,6 @@ static void init_cmd(void) {
 	_off_cmd = 0;
 	_argv0 = "";
 	syscall3(SYS_PROC_GET_CMD, getpid(), (int32_t)_cmd, PROC_INFO_CMD_MAX);
-}
-
-FILE* stdin = NULL;
-FILE* stdout = NULL;
-FILE* stderr = NULL;
-
-static FILE _stdin;
-static FILE _stdout;
-static FILE _stderr;
-
-static void init_stdio(void) {
-	_stdin.fd = 0;
-	_stdin.oflags = O_RDONLY;
-	stdin = &_stdin;
-
-	_stdout.fd = 1;
-	_stdout.oflags = O_WRONLY;
-	stdout = &_stdout;
-
-	_stderr.fd = 2;
-	_stderr.oflags = O_WRONLY;
-	stderr = &_stderr;
 }
 
 #define ARG_MAX 16
@@ -134,10 +112,11 @@ void _start(void) {
 		*p++ = 0;
 	}
 
+	_libc_init();
+	//__ewok_malloc_init();
+	proc_init();
 	sys_signal_init();
 	vfs_init();
-	proc_init();
-	init_stdio();
 	init_cmd();
 
 
@@ -150,8 +129,6 @@ void _start(void) {
 		argv[argc++] = arg;
 	}
 
-
-	_libc_init();
 	// int val = setenv("PATH", "/bin", 1);
 	// klog("setenv: %d\n", val);
 	// // const char* paths = getenv("PATH");
@@ -159,9 +136,10 @@ void _start(void) {
 	loadenv();
 	
 	int ret = main(argc, argv);
-	_libc_exit();
 	close_stdio();
-	__malloc_close();
+	//__ewok_malloc_close();
+	proc_exit();
+	_libc_exit();
 	exit(ret);
 }
 

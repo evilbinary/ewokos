@@ -6,7 +6,7 @@
 #include <ewoksys/core.h>
 #include <ewoksys/ipc.h>
 #include <ewoksys/proc.h>
-#include <vprintf.h>
+
 #include <ewoksys/mstr.h>
 #include <fcntl.h>
 #include <ewoksys/syscall.h>
@@ -17,7 +17,7 @@
 
 bool _initrd = false;
 bool _stdio_inited = false;
-bool _stderr_console_inited = false;
+int  _console_fd = -1;
 bool _terminated = false;
 
 old_cmd_t* _history = NULL;
@@ -69,7 +69,7 @@ static int32_t find_exec(char* cmd, char* fname, char* full_cmd) {
 	i = 0;
 	while(1) {
 		if(paths[i] == 0 || paths[i] == ':') {
-			strncpy(path, paths, i);
+			sstrncpy(path, paths, i);
 			path[i] = 0;
 			if(path[0] != 0) {
 				snprintf(fname, FS_FULL_NAME_MAX-1, "%s/%s", path, cmd);
@@ -130,7 +130,7 @@ static int do_cmd(char* cmd) {
 		return -1;
 	}
 
-	exec(full_cmd);
+	proc_exec(full_cmd);
 	return 0;
 }
 
@@ -142,7 +142,7 @@ static int do_pipe_cmd(char* p1, char* p2) {
 		return -1;
 	}
 
-	int pid = fork();
+	int pid = syscall0(SYS_FORK);
 	if(pid != 0) { //father proc for p2 reader.
 		close(fds[1]);
 		dup2(fds[0], 0);
@@ -194,9 +194,9 @@ static void prompt(void) {
 		cid = "0";
 	char cwd[FS_FULL_NAME_MAX+1];
 	if(uid == 0)
-		printf("ewok(%s):%s# ", cid, getcwd(cwd, FS_FULL_NAME_MAX));
+		printf("\033[4mewok(%s):%s#\033[0m ", cid, getcwd(cwd, FS_FULL_NAME_MAX));
 	else
-		printf("ewok(%s):%s$ ", cid, getcwd(cwd, FS_FULL_NAME_MAX));
+		printf("\033[4mewok(%s):%s$\033[0m ", cid, getcwd(cwd, FS_FULL_NAME_MAX));
 }
 
 static void try_init_stdio(void) {
@@ -210,15 +210,6 @@ static void try_init_stdio(void) {
 			_stdio_inited = true;
 		}
 	}
-
-	if(!_stderr_console_inited) {
-		int fd_console = open("/dev/console0", O_RDWR);
-		if(fd_console > 0) {
-			dup2(fd_console, 2);
-			close(fd_console);
-			_stderr_console_inited = true;
-		}
-	}
 }
 
 static void initrd_out(const char* cmd) {
@@ -226,27 +217,26 @@ static void initrd_out(const char* cmd) {
 		return;
 
 	try_init_stdio();
-
 	if(!_stdio_inited) {
 		klog("%s\n", cmd);
 		return;
 	}
-
-	if(_stderr_console_inited) {
-		if(write(1, cmd, strlen(cmd)) > 0)
-			write(1, "\n", 1);
-	}
-
-	if(write(2, cmd, strlen(cmd)) > 0)
-		write(2, "\n", 1);
+	printf("%s\n", cmd);
+	
+	if(_console_fd < 0) 
+		_console_fd = open("/dev/console0", O_RDWR);
+	if(_console_fd >= 0) 
+		dprintf(_console_fd, "%s\n", cmd);
 }
 
 int main(int argc, char* argv[]) {
 	_initrd = false;
 	_stdio_inited = false;
-	_stderr_console_inited = false;
+	_console_fd = -1;
 	_history = NULL;
 	_terminated = 0;
+	setbuf(stdout, NULL);
+	setbuf(stderr, NULL);
 
 	int fd_in = 0;
 	if(argc > 2) {
@@ -269,8 +259,9 @@ int main(int argc, char* argv[]) {
 		if(fd_in == 0)
 			prompt();
 
-		if(gets(fd_in, cmdstr) != 0 && cmdstr->len == 0)
+		if(cmd_gets(fd_in, cmdstr) != 0 && cmdstr->len == 0)
 			break;
+
 		char* cmd = cmdstr->cstr;
 		if(cmd[0] == 0)
 			continue;
@@ -308,7 +299,6 @@ int main(int argc, char* argv[]) {
 	}
 	if(fd_in > 0) //close initrd file
 		close(fd_in);
-	str_free(cmdstr);	
-	free_history();
+free_history();
 	return 0;
 }

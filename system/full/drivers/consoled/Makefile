@@ -12,17 +12,18 @@ CONSOLED_OBJS = consoled.o
 CONSOLED = $(TARGET_DIR)/drivers/consoled
 
 $(CONSOLED): $(CONSOLED_OBJS) \
-		$(BUILD_DIR)/lib/libewoksys.a \
+		$(EWOK_LIBC_A)  \
 		$(BUILD_DIR)/lib/libsconf.a \
 		$(BUILD_DIR)/lib/libfb.a \
-		$(BUILD_DIR)/lib/libconsole.a \
+		$(BUILD_DIR)/lib/libterminal.a \
+		$(BUILD_DIR)/lib/libgterminal.a \
 		$(BUILD_DIR)/lib/libtextview.a \
 		$(BUILD_DIR)/lib/libgraph.a \
 		$(BUILD_DIR)/lib/libupng.a \
 		$(BUILD_DIR)/lib/libttf.a  \
 		$(BUILD_DIR)/lib/libfont.a  \
 		$(BUILD_DIR)/lib/libdisplay.a 
-	$(LD) -Ttext=100 $(CONSOLED_OBJS) -o $(CONSOLED) $(LDFLAGS) -lfb -ldisplay -lconsole -ltextview -lgraph -lbsp -lttf  -lfont -lupng -lsconf -lewoksys -lc -lgloss -lsoftfloat
+	$(LD) -Ttext=100 $(CONSOLED_OBJS) -o $(CONSOLED) $(LDFLAGS) -lfb -ldisplay -lgterminal -lterminal -ltextview -lgraph -lbsp -lttf  -lfont -lupng -lsconf $(EWOK_LIBC)
 
 clean:
 	rm -f $(CONSOLED_OBJS)

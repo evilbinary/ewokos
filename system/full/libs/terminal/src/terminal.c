@@ -19,12 +19,61 @@ void terminal_close(terminal_t* terminal) {
 	memset(terminal, 0, sizeof(terminal_t));
 }
 
-void terminal_set(terminal_t* terminal, UNICODE16 c, uint32_t color) {
+void terminal_scroll(terminal_t* terminal, uint32_t lines) {
+	uint32_t mlines = terminal->curs_y + 1;
+	if(lines > mlines)
+		lines = mlines;
+	mlines -= lines;
+
+	for(uint32_t i=0; i<mlines; i++) {
+		for(uint32_t j=0; j<terminal->cols; j++) {
+			uint32_t at = i*terminal->cols + j;
+			uint32_t atm = (i+lines)*terminal->cols + j;
+			terminal->content[at].c = terminal->content[atm].c;
+			terminal->content[at].color = terminal->content[atm].color;
+			terminal->content[at].state = terminal->content[atm].state;
+			terminal->content[at].bg_color = terminal->content[atm].bg_color;
+		}
+	}
+	for(uint32_t i=0; i<lines; i++) {
+		for(uint32_t j=0; j<terminal->cols; j++) {
+			uint32_t atm = (i+mlines)*terminal->cols + j;
+			terminal->content[atm].c = 0;
+			terminal->content[atm].color = 0;
+			terminal->content[atm].state = 0;
+			terminal->content[atm].bg_color = 0;
+		}
+	}
+}
+
+void terminal_set(terminal_t* terminal, UNICODE16 c, uint16_t state, uint32_t color, uint32_t bg_color) {
 	if(terminal->content == NULL)
 		return;
 	uint32_t at = terminal_at(terminal);
 	terminal->content[at].c = c;
 	terminal->content[at].color = color;
+	terminal->content[at].state = state;
+	terminal->content[at].bg_color = bg_color;
+}
+
+void terminal_push(terminal_t* terminal, UNICODE16 c, uint16_t state, uint32_t color, uint32_t bg_color) {
+	terminal_set(terminal, c, state, color,  bg_color);
+	if(c == '\n') {
+		if((terminal->curs_y+1) >= terminal->rows) {
+			terminal_scroll(terminal, 1);
+			terminal_move_to(terminal, 0, terminal->curs_y);
+		}
+		else
+			terminal_move_next_line(terminal);
+	}
+	else {
+		if((terminal_at(terminal)+1) >= terminal_size(terminal)) {//full
+				terminal_scroll(terminal, 1);
+				terminal_move_to(terminal, 0, terminal->curs_y);
+		}
+		else
+				terminal_move(terminal, 1);
+	}
 }
 
 void terminal_clear(terminal_t* terminal) {
@@ -32,6 +81,8 @@ void terminal_clear(terminal_t* terminal) {
 	for(uint32_t i=0; i<size; i++) {
 		terminal->content[i].c = 0;
 		terminal->content[i].color = 0;
+		terminal->content[i].state = 0;
+		terminal->content[i].bg_color = 0;
 	}
 }
 
@@ -41,6 +92,7 @@ void terminal_reset(terminal_t* terminal, uint32_t cols, uint32_t rows) {
 
 	if(terminal->content != NULL)
 		free(terminal->content);
+	memset(terminal, 0, sizeof(terminal_t));
 
 	uint32_t size = cols * rows;
 	terminal->content = (tchar_t*)calloc(size * sizeof(tchar_t), 1);
@@ -52,11 +104,9 @@ void terminal_move_to(terminal_t* terminal, uint32_t x, uint32_t y) {
 	terminal->curs_x = x;	
 	terminal->curs_y = y;	
 
-	if(terminal->curs_y >= terminal->rows) {
+	if(terminal->curs_y >= terminal->rows)
 		terminal->curs_y = terminal->rows - 1;
-		terminal->curs_x = terminal->cols - 1;
-	}
-	else if(terminal->curs_x >= terminal->cols)
+	if(terminal->curs_x >= terminal->cols)
 		terminal->curs_x = terminal->cols - 1;
 }
 
@@ -99,19 +149,38 @@ inline uint32_t terminal_at(terminal_t* terminal) {
 	return terminal->curs_y*terminal->cols + terminal->curs_x;
 }
 
-inline tchar_t* terminal_get_by_at(terminal_t* terminal, uint32_t at) {
+inline tchar_t* terminal_getc_by_at(terminal_t* terminal, uint32_t at) {
 	if(terminal->content == NULL || at >= terminal_size(terminal))
 		return NULL;
 	return  &terminal->content[at];
 }
 
-tchar_t* terminal_get_by_pos(terminal_t* terminal, uint32_t x, uint32_t y) {
+tchar_t* terminal_getc_by_pos(terminal_t* terminal, uint32_t x, uint32_t y) {
 	uint32_t at = terminal_at_by_pos(terminal, x, y);
-	return terminal_get_by_at(terminal, at);
+	return terminal_getc_by_at(terminal, at);
 }
 
-tchar_t* terminal_get(terminal_t* terminal) {
+tchar_t* terminal_getc(terminal_t* terminal) {
 	return &terminal->content[terminal_at(terminal)];
+}
+
+tchar_t* terminal_gets(terminal_t* terminal, uint32_t* size) {
+	*size = 0;
+	uint32_t sz = terminal_size(terminal);
+	tchar_t* ret = (tchar_t*)malloc(sizeof(tchar_t)*sz);
+	if(ret == NULL)
+		return NULL;
+
+	uint32_t j = 0;
+	for(uint32_t i=0; i<sz; i++) {
+		tchar_t* c = &terminal->content[i];
+		if(c->c != 0) {
+			memcpy(&ret[j], c, sizeof(tchar_t));
+			j++;
+		}
+	}
+	*size = j;
+	return ret;
 }
 
 inline uint32_t terminal_size(terminal_t* terminal) {

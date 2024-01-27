@@ -500,17 +500,26 @@ inline void* proc_malloc(proc_t* proc, int32_t size) {
 		return (void*)proc->space->malloc_base;
 
 	uint8_t expand = 1;
+	uint32_t pages;
 	if(size < 0) {
 		expand = 0;
 		size = -size;
+		size = ALIGN_DOWN(size, PAGE_SIZE);
 	}
+	else {
+		size = ALIGN_UP(size, PAGE_SIZE);
+	}
+	pages = (size / PAGE_SIZE);
 
-	size = ALIGN_UP(size, PAGE_SIZE);
-	uint32_t pages = size / PAGE_SIZE;
-	if(expand == 0)
+	if(expand == 0) {
+		//kprintf("kproc shrink pages: %d, size: %d\n", pages, size);
 		proc_shrink_mem(proc, pages);
-	else if(proc_expand_mem(proc, pages) != 0)
-		return NULL;
+	}
+	else {
+		//kprintf("kproc expand pages: %d, size: %d\n", pages, size);
+		if(proc_expand_mem(proc, pages) != 0)
+			return NULL;
+	}
 	return (void*)proc->space->malloc_base;
 }
 
@@ -747,6 +756,9 @@ static inline void proc_page_clone(proc_t* to, uint32_t to_addr, proc_t* from, u
 
 static int32_t proc_clone(proc_t* child, proc_t* parent) {
 	uint32_t pages = parent->space->heap_size / PAGE_SIZE;
+	if((parent->space->heap_size % PAGE_SIZE) != 0)
+		pages++;
+
 	//Copy On Write
 	uint32_t p;
 	for(p=0; p<pages; ++p) { 
@@ -762,7 +774,6 @@ static int32_t proc_clone(proc_t* child, proc_t* parent) {
 				phy_page_addr,
 				AP_RW_R, PTE_ATTR_WRBACK); // set parent page table with read only permissions
 	}
-	flush_tlb();
 	child->space->heap_size = pages * PAGE_SIZE;
 
 	//set father
@@ -776,6 +787,7 @@ static int32_t proc_clone(proc_t* child, proc_t* parent) {
 			parent->stack.user_stack[i]);
 	}
 	child->space->malloc_base = parent->space->malloc_base;
+	flush_tlb();
 	return 0;
 }
 
@@ -797,6 +809,10 @@ proc_t* kfork_raw(context_t* ctx, int32_t type, proc_t* parent) {
 			printf("panic: kfork clone failed!!(%d)\n", parent->info.pid);
 			return NULL;
 		}
+		/*kprintf("clone: \n\tfather: 0x%x->0x%x\n\tchild:  0x%x->0x%x\n",
+				parent->space->malloc_base, parent->space->heap_size,
+				child->space->malloc_base, child->space->heap_size);
+				*/
 	}
 	else {
 		child->ctx.sp = ALIGN_DOWN(child->stack.thread_stack_base + THREAD_STACK_PAGES*PAGE_SIZE, 8);

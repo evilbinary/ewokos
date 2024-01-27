@@ -12,8 +12,8 @@ XJOYSTICKD_OBJS = xjoystickd.o
 XJOYSTICKD = $(TARGET_DIR)/sbin/x/xjoystickd
 
 $(XJOYSTICKD): $(XJOYSTICKD_OBJS) \
-		$(BUILD_DIR)/lib/libewoksys.a 
-	$(LD) -Ttext=100 $(XJOYSTICKD_OBJS) -o $(XJOYSTICKD) $(LDFLAGS) -lewoksys -lc -lgloss -lsoftfloat
+		$(EWOK_LIBC_A)  
+	$(LD) -Ttext=100 $(XJOYSTICKD_OBJS) -o $(XJOYSTICKD) $(LDFLAGS) $(EWOK_LIBC)
 
 clean:
 	rm -f $(XJOYSTICKD_OBJS)
