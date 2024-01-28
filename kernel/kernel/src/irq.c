@@ -133,8 +133,6 @@ inline void irq_handler(context_t* ctx) {
 	kernel_unlock();
 }
 
-
-
 static int32_t copy_on_write(proc_t* proc, uint32_t v_addr) {
 	v_addr = ALIGN_DOWN(v_addr, PAGE_SIZE);
 	uint32_t phy_addr = resolve_phy_address(proc->space->vm, v_addr);
@@ -181,7 +179,8 @@ void prefetch_abort_handler(context_t* ctx, uint32_t status) {
 		dump_ctx(ctx);
 		halt();
 	}
-	
+	/*kprintf("handle prefetch abort: %d, status: 0x%x, addr: 0x%x\n", cproc->info.pid, status, ctx->pc);
+
 	if(((status & 0x1D) == 0xD || //permissions fault only
 		(status & 0x1F) == 0x6) && 
 			ctx->pc < cproc->space->heap_size) { //in proc heap only
@@ -194,6 +193,7 @@ void prefetch_abort_handler(context_t* ctx, uint32_t status) {
 		if(res == 0)
 			return;
 	}
+	*/
 
 	printf("pid: %d(%s), prefetch abort!! (core %d) code:0x%x\n", cproc->info.pid, cproc->info.cmd, core, status);
 	dump_ctx(&cproc->ctx);
@@ -210,11 +210,14 @@ void data_abort_handler(context_t* ctx, uint32_t addr_fault, uint32_t status) {
 		dump_ctx(ctx);
 		halt();
 	}
+	//kprintf("handle data abort: %d, 0x%x, 0x%x\n", cproc->info.pid, status, addr_fault);
 
 	uint32_t err = 0;
 	const char* errmsg = "";
-	if((status & 0x5) == 0x5) { //permissions fault only
-		if(addr_fault >= 0x100 && addr_fault < cproc->space->heap_size) { //in proc heap only
+	uint32_t legel_addr_base = cproc->space->rw_heap_base;
+
+	if((status & 0x5) == 0x5 || (status & 0xD) == 0xD) { //permissions fault only
+		if(addr_fault >= legel_addr_base && addr_fault < cproc->space->heap_size) { //in proc heap only
 			if (kernel_lock_check() > 0)
 				return;
 
@@ -239,7 +242,7 @@ void data_abort_handler(context_t* ctx, uint32_t addr_fault, uint32_t status) {
 	printf("\npid: %d(%s), core: %d, data abort at: 0x%X, status: 0x%X\n", 
 			cproc->info.pid, cproc->info.cmd, cproc->info.core, addr_fault, status);
 	if(err == 2) //illegel address
-		printf("\terror: %s! heap(0x%X->0x%X)\n", errmsg, 0x100, cproc->space->heap_size);
+		printf("\terror: %s! heap(0x%X->0x%X)\n", errmsg, legel_addr_base, cproc->space->heap_size);
 	else
 		printf("\terror: %s!\n", errmsg);
 
