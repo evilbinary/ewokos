@@ -157,11 +157,13 @@ static void do_read(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, voi
 			PF->addi(out, -1);
 		}
 		else {
-			size = dev->read(fd, from_pid, info, buf, size, offset, p);
-			PF->addi(out, size);
-			if(size > 0) {
+			int32_t rd = dev->read(fd, from_pid, info, buf, size, offset, p);
+			PF->addi(out, rd);
+			if(rd > 0) {
+				if(rd > size)
+					rd = size;
 				if(shm_id == -1) {
-					PF->add(out, buf, size);
+					PF->add(out, buf, rd);
 				}
 			}
 
@@ -582,8 +584,7 @@ int device_run(vdevice_t* dev, const char* mnt_point, int mnt_type, int mode) {
 
 int dev_cntl_by_pid(int pid, int cmd, proto_t* in, proto_t* out) {
 	proto_t in_arg;
-	PF->init(&in_arg)->
-		addi(&in_arg, cmd);
+	PF->init(&in_arg)->addi(&in_arg, cmd);
 
 	if(in != NULL)
 		PF->add(&in_arg, in->data, in->size);

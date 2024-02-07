@@ -27,7 +27,7 @@ static int xwin_update_info(xwin_t* xwin, uint8_t type) {
 	}
 
 	proto_t in;
-	PF->init(&in)->addi(&in, xwin->xinfo_shm_id)->addi(&in, type);
+	PF->format(&in, "i,i", xwin->xinfo_shm_id, type);
 	int ret = vfs_fcntl_wait(xwin->fd, XWIN_CNTL_UPDATE_INFO, &in);
 	PF->clear(&in);
 	return ret;
@@ -46,8 +46,7 @@ int xwin_top(xwin_t* xwin) {
 static int  x_get_win_rect(int xfd, int style, grect_t* wsr, grect_t* win_space) {
 	proto_t in, out;
 	PF->init(&out);
-
-	PF->init(&in)->addi(&in, style)->add(&in, wsr, sizeof(grect_t));
+	PF->format(&in, "i,m", style, wsr, sizeof(grect_t));
 	int ret = vfs_fcntl(xfd, XWIN_CNTL_WORK_SPACE, &in, &out);
 	PF->clear(&in);
 	if(ret == 0) 
@@ -102,7 +101,7 @@ xwin_t* xwin_open(x_t* xp, uint32_t disp_index, int x, int y, int w, int h, cons
 	ret->xinfo->style = style;
 	ret->xinfo->display_index = disp_index;
 	memcpy(&ret->xinfo->wsr, &r, sizeof(grect_t));
-	sstrncpy(ret->xinfo->title, title, XWIN_TITLE_MAX-1);
+	strncpy(ret->xinfo->title, title, XWIN_TITLE_MAX-1);
 	xwin_update_info(ret, X_UPDATE_REBUILD | X_UPDATE_REFRESH);
 	return ret;
 }

@@ -83,18 +83,33 @@ static inline void vfs_clear_file(int fd) {
 	memset(&_fsfiles[fd], 0, sizeof(fsfile_t));
 }
 
-fsfile_t* vfs_get_file(int fd) {
+static fsfile_t* vfs_get_file(int fd) {
 	if(fd < 0 || fd >= PROC_FILE_MAX)
 		return NULL;
 
 	fsfile_t* ret = &_fsfiles[fd];
-	if(ret->info.node != NULL)
+	if(ret->info.node != 0)
 		return ret;
 
 	fsinfo_t info;
 	if(vfs_get_by_fd_raw(fd, &info) != 0)
 		return NULL;
 	return vfs_set_file(fd, &info);
+}
+
+int vfs_get_flags(int fd) {
+	fsfile_t* file = vfs_get_file(fd);
+	if(file == NULL)
+		return -1;
+	return file->flags;
+}
+
+int vfs_set_flags(int fd, int flags) {
+	fsfile_t* file = vfs_get_file(fd);
+	if(file == NULL)
+		return -1;
+	file->flags = flags;
+	return 0;
 }
 
 int vfs_check_access(int pid, fsinfo_t* info, int mode) {
@@ -174,7 +189,8 @@ int vfs_get_by_node(uint32_t node, fsinfo_t* info) {
 
 int vfs_new_node(fsinfo_t* info, uint32_t node_to) {
 	proto_t in, out;
-	PF->init(&in)->add(&in, info, sizeof(fsinfo_t))->addi(&in, node_to);
+	//PF->init(&in)->add(&in, info, sizeof(fsinfo_t))->addi(&in, node_to);
+	PF->format(&in, "m,i", info, sizeof(fsinfo_t), node_to);
 	PF->init(&out);
 	int res = ipc_call(get_vfsd_pid(), VFS_NEW_NODE, &in, &out);
 	PF->clear(&in);
@@ -203,15 +219,16 @@ const char* vfs_fullname(const char* fname) {
 		str_add(fullname, fname);
 	}
 
-	static char ret[FS_FULL_NAME_MAX];
-	sstrncpy(ret, fullname->cstr, FS_FULL_NAME_MAX-1);
+	static char ret[FS_FULL_NAME_MAX] = {0};
+	strncpy(ret, fullname->cstr, FS_FULL_NAME_MAX-1);
 	str_free(fullname);
 	return ret;
 }
 
 int vfs_open(fsinfo_t* info, int oflag) {
 	proto_t in, out;
-	PF->init(&in)->add(&in, info, sizeof(fsinfo_t))->addi(&in, oflag);
+	PF->format(&in, "m,i", info, sizeof(fsinfo_t), oflag);
+	//PF->init(&in)->add(&in, info, sizeof(fsinfo_t))->addi(&in, oflag);
 	PF->init(&out);
 
 	int res = ipc_call(get_vfsd_pid(), VFS_OPEN, &in, &out);
@@ -234,7 +251,7 @@ int vfs_open(fsinfo_t* info, int oflag) {
 
 static int read_pipe(int fd, uint32_t node, void* buf, uint32_t size, bool block) {
 	proto_t in, out;
-	PF->init(&in)->addi(&in, fd)->addi(&in, node)->addi(&in, size)->addi(&in, block?1:0);
+	PF->format(&in, "i,i,i,i", fd, node, size, block?1:0);
 	PF->init(&out);
 
 	int vfsd_pid = get_vfsd_pid();
@@ -255,7 +272,8 @@ static int read_pipe(int fd, uint32_t node, void* buf, uint32_t size, bool block
 
 static int write_pipe(int fd, uint32_t node, const void* buf, uint32_t size, bool block) {
 	proto_t in, out;
-	PF->init(&in)->addi(&in, fd)->addi(&in, node)->add(&in, buf, size)->addi(&in, block?1:0);
+	//PF->init(&in)->addi(&in, fd)->addi(&in, node)->add(&in, buf, size)->addi(&in, block?1:0);
+	PF->format(&in, "i,i,m,i", fd, node, buf, size, block?1:0);
 	PF->init(&out);
 
 	int vfsd_pid = get_vfsd_pid();
@@ -270,25 +288,6 @@ static int write_pipe(int fd, uint32_t node, const void* buf, uint32_t size, boo
 		proc_block_by(vfsd_pid, node); 
 	}
 	return res;	
-}
-
-int vfs_dup(int fd) {
-	proto_t in, out;
-	PF->init(&in)->addi(&in, fd);
-	PF->init(&out);
-
-	int res = ipc_call(get_vfsd_pid(), VFS_DUP, &in, &out);
-	PF->clear(&in);
-	if(res == 0) {
-		res = proto_read_int(&out);
-		if(res >= 0) {
-			fsinfo_t info;
-			proto_read_to(&out, &info, sizeof(fsinfo_t));
-			vfs_set_file(res, &info);
-		}
-	}
-	PF->clear(&out);
-	return res;
 }
 
 int vfs_close_info(int fd) {
@@ -312,11 +311,39 @@ int vfs_close(int fd) {
 	return vfs_close_info(fd);
 }
 
+int vfs_dup(int fd) {
+	fsfile_t* file = vfs_get_file(fd);
+	if(file == NULL)
+		return -1;
+
+	proto_t in, out;
+	PF->init(&in)->addi(&in, fd);
+	PF->init(&out);
+
+	int res = ipc_call(get_vfsd_pid(), VFS_DUP, &in, &out);
+	PF->clear(&in);
+	if(res == 0) {
+		res = proto_read_int(&out);
+		if(res >= 0) {
+			fsinfo_t info;
+			proto_read_to(&out, &info, sizeof(fsinfo_t));
+			fsfile_t* file_to = vfs_set_file(res, &info);
+			file_to->flags = file->flags;
+		}
+	}
+	PF->clear(&out);
+	return res;
+}
+
 int vfs_dup2(int fd, int to) {
+	fsfile_t* file = vfs_get_file(fd);
+	if(file == NULL)
+		return -1;
+
 	vfs_close(to);
 
 	proto_t in, out;
-	PF->init(&in)->addi(&in, fd)->addi(&in, to);
+	PF->format(&in, "i,i", fd, to);
 	PF->init(&out);
 
 	int res = ipc_call(get_vfsd_pid(), VFS_DUP2, &in, &out);
@@ -326,7 +353,8 @@ int vfs_dup2(int fd, int to) {
 		if(res >= 0) {
 			fsinfo_t info;
 			proto_read_to(&out, &info, sizeof(fsinfo_t));
-			vfs_set_file(res, &info);
+			fsfile_t* file_to = vfs_set_file(res, &info);
+			file_to->flags = file->flags;
 		}
 	}
 	PF->clear(&out);
@@ -665,12 +693,8 @@ int vfs_read(int fd, fsinfo_t *info, void* buf, uint32_t size) {
 		if(info->type == FS_TYPE_FILE)
 			vfs_seek(fd, offset);
 	}
-	else if(res == ERR_RETRY) {
+	else if(res == VFS_ERR_RETRY) {
 		errno = EAGAIN;
-		res = -1;
-	}
-	else if(res == ERR_RETRY_NON_BLOCK) {
-		errno = EAGAIN_NON_BLOCK;
 		res = -1;
 	}
 	return res;
@@ -706,7 +730,7 @@ int vfs_write(int fd, fsinfo_t* info, const void* buf, uint32_t size) {
 			vfs_seek(fd, offset);
 		}
 	}
-	else if(res == -2) {
+	else if(res == VFS_ERR_RETRY) {
 		errno = EAGAIN;
 		res = -1;
 	}

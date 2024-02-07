@@ -81,7 +81,7 @@ static int font_open(const char* fname, int ppm, int ttf_index) {
 			return -1;
 
 		_ttfs[i].ttf = ttf;
-		sstrncpy(_ttfs[i].name, fname, NAME_LEN-1);
+		strncpy(_ttfs[i].name, fname, NAME_LEN-1);
 		ttf_index = i;
 	}
 
@@ -154,15 +154,12 @@ static int font_dev_get(proto_t* in, proto_t* ret) {
 		return -1;
 	}
 	if(glyph.cache != NULL) {
-		PF->init(ret)->
-			add(ret, &glyph, sizeof(TTY_Glyph))->
-			add(ret, glyph.cache,
-					font->inst.maxGlyphSize.x*
-					font->inst.maxGlyphSize.y);
+		PF->format(ret, "m,m",
+				&glyph, sizeof(TTY_Glyph),
+				glyph.cache, font->inst.maxGlyphSize.x*font->inst.maxGlyphSize.y);
 	}
 	else {
-		PF->init(ret)->
-			add(ret, &glyph, sizeof(TTY_Glyph));
+		PF->init(ret)->add(ret, &glyph, sizeof(TTY_Glyph));
 	}
 	return 0;
 }

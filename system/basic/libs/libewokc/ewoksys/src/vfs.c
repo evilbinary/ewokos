@@ -11,6 +11,7 @@
 #include <ewoksys/proc.h>
 #include <ewoksys/vfsc.h>
 #include <ewoksys/devcmd.h>
+#include <ewoksys/vdevice.h>
 #include <ewoksys/proc.h>
 #include <sys/shm.h>
 // #include <sys/unistd.h>
@@ -97,6 +98,20 @@ fsfile_t* vfs_get_file(int fd) {
 	return vfs_set_file(fd, &info);
 }
 
+int vfs_get_flags(int fd) {
+	fsfile_t* file = vfs_get_file(fd);
+	if(file == NULL)
+		return -1;
+	return file->flags;
+}
+
+int vfs_set_flags(int fd, int flags) {
+	fsfile_t* file = vfs_get_file(fd);
+	if(file == NULL)
+		return -1;
+	file->flags = flags;
+	return 0;
+}
 int vfs_check_access(int pid, fsinfo_t* info, int mode) {
 	procinfo_t procinfo;
 	if(info == NULL || proc_info(pid, &procinfo) != 0)
@@ -203,8 +218,8 @@ const char* vfs_fullname(const char* fname) {
 		str_add(fullname, fname);
 	}
 
-	static char ret[FS_FULL_NAME_MAX];
-	sstrncpy(ret, fullname->cstr, FS_FULL_NAME_MAX-1);
+	static char ret[FS_FULL_NAME_MAX] = {0};
+	strncpy(ret, fullname->cstr, FS_FULL_NAME_MAX-1);
 	str_free(fullname);
 	return ret;
 }
@@ -665,12 +680,8 @@ int vfs_read(int fd, fsinfo_t *info, void* buf, uint32_t size) {
 		if(info->type == FS_TYPE_FILE)
 			vfs_seek(fd, offset);
 	}
-	else if(res == ERR_RETRY) {
+	else if(res == VFS_ERR_RETRY) {
 		errno = EAGAIN;
-		res = -1;
-	}
-	else if(res == ERR_RETRY_NON_BLOCK) {
-		errno = EAGAIN_NON_BLOCK;
 		res = -1;
 	}
 	return res;
@@ -706,7 +717,7 @@ int vfs_write(int fd, fsinfo_t* info, const void* buf, uint32_t size) {
 			vfs_seek(fd, offset);
 		}
 	}
-	else if(res == -2) {
+	else if(res == VFS_ERR_RETRY) {
 		errno = EAGAIN;
 		res = -1;
 	}

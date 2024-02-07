@@ -5,7 +5,7 @@
 #include <ewoksys/mstr.h>
 #include <ewoksys/proto.h>
 #include <ewoksys/vfsc.h>
-#include <sys/errno.h>
+#include <ewoksys/vdevice.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,11 +18,13 @@ typedef struct {
 } fsfile_t;
 
 #define RW_BLOCK_EVT	1
+
 #define VFS_BUF_SIZE (1024*8)
 
 const char* vfs_fullname(const char* fname);
 
-fsfile_t* vfs_get_file(int fd);
+int       vfs_get_flags(int fd);
+int       vfs_set_flags(int fd, int flags);
 void      vfs_init(void);
 int       vfs_read_pipe(int fd, uint32_t node, void* buf, uint32_t size, bool block);
 int       vfs_write_pipe(int fd, uint32_t node, const void* buf, uint32_t size, bool block);

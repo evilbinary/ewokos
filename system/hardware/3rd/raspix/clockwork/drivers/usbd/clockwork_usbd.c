@@ -4,6 +4,7 @@
 #include <string.h>
 #include <ewoksys/vdevice.h>
 #include <ewoksys/syscall.h>
+#include <ewoksys/vfs.h>
 #include <ewoksys/mmio.h>
 #include <ewoksys/dma.h>
 #include <ewoksys/interrupt.h>
@@ -115,7 +116,7 @@ static int usb_read(int fd, int from_pid, fsinfo_t* node,
         }
     }
 
-    return ERR_RETRY;
+    return VFS_ERR_RETRY;
  }
 
 

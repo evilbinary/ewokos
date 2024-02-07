@@ -59,7 +59,6 @@ typedef struct {
 	bool bg_run;
 	bool force_fullscreen;
 	char xwm[128];
-	char theme[128];
 } x_conf_t;
 
 typedef struct {
@@ -130,11 +129,7 @@ static int32_t read_config(x_t* x, const char* fname) {
 	
 	v = sconf_get(conf, "xwm");
 	if(v[0] != 0) 
-		sstrncpy(x->config.xwm, v, 127);
-	
-	v = sconf_get(conf, "theme");
-	if(v[0] != 0)
-		sstrncpy(x->config.theme, v, 127);
+		strncpy(x->config.xwm, v, 127);
 
 	v = sconf_get(conf, "cursor");
 	if(strcmp(v, "touch") == 0)
@@ -157,11 +152,11 @@ static void draw_win_frame(x_t* x, xwin_t* win) {
 		return;
 
 	proto_t in;
-	PF->init(&in)->
-		addi(&in, display->g_shm_id)->
-		addi(&in, display->g->w)->
-		addi(&in, display->g->h)->
-		add(&in, win->xinfo, sizeof(xinfo_t));
+	PF->format(&in, "i,i,i,m",
+		display->g_shm_id,
+		display->g->w,
+		display->g->h,
+		win->xinfo, sizeof(xinfo_t));
 	if(win == x->win_focus)
 		PF->addi(&in, 1); //top win
 	else
@@ -177,10 +172,10 @@ static void draw_desktop(x_t* x, uint32_t display_index) {
 		return;
 
 	proto_t in;
-	PF->init(&in)->
-		addi(&in, display->g_shm_id)->
-		addi(&in, display->g->w)->
-		addi(&in, display->g->h);
+	PF->format(&in, "i,i,i",
+		display->g_shm_id,
+		display->g->w,
+		display->g->h);
 
 	int res = ipc_call_wait(x->xwm_pid, XWM_CNTL_DRAW_DESKTOP, &in);
 	PF->clear(&in);
@@ -210,11 +205,11 @@ static void draw_drag_frame(x_t* xp, uint32_t display_index) {
 	grect_t r = {x, y, w, h};
 
 	proto_t in;
-	PF->init(&in)->
-		addi(&in, display->g_shm_id)->
-		addi(&in, display->g->w)->
-		addi(&in, display->g->h)->
-		add(&in, &r, sizeof(grect_t));
+	PF->format(&in, "i,i,i,m",
+		display->g_shm_id,
+		display->g->w,
+		display->g->h,
+		&r, sizeof(grect_t));
 
 	ipc_call_wait(xp->xwm_pid, XWM_CNTL_DRAW_DRAG_FRAME, &in);
 	PF->clear(&in);
@@ -707,6 +702,8 @@ static void mark_dirty_confirm(x_t* x, xwin_t* win) {
 }
 
 static void mark_dirty(x_t* x, xwin_t* win) {
+	if(win->xinfo == NULL)
+		return;
 	xwin_t* win_next = win->next;
 
 	if(win->xinfo->visible && win->dirty) {
@@ -823,8 +820,7 @@ static int x_update_frame_areas(x_t* x, xwin_t* win) {
 
 	proto_t in, out;
 	PF->init(&out);
-	PF->init(&in)->
-		add(&in, win->xinfo, sizeof(xinfo_t));
+	PF->init(&in)->add(&in, win->xinfo, sizeof(xinfo_t));
 	int res = ipc_call(x->xwm_pid, XWM_CNTL_GET_FRAME_AREAS, &in, &out);
 	PF->clear(&in);
 
@@ -840,8 +836,7 @@ static int x_update_frame_areas(x_t* x, xwin_t* win) {
 static void x_get_min_size(x_t* x, xwin_t* win, int *w, int* h) {
 	proto_t in, out;
 	PF->init(&out);
-	PF->init(&in)->
-		add(&in, win->xinfo, sizeof(xinfo_t));
+	PF->init(&in)->add(&in, win->xinfo, sizeof(xinfo_t));
 	int res = ipc_call(x->xwm_pid, XWM_CNTL_GET_MIN_SIZE, &in, &out);
 	PF->clear(&in);
 	if(res == 0) { 
@@ -867,9 +862,7 @@ static int get_xwm_win_space(x_t* x, int style, grect_t* rin, grect_t* rout) {
 	proto_t in, out;
 	PF->init(&out);
 
-	PF->init(&in)->
-		addi(&in, style)->
-		add(&in, rin, sizeof(grect_t));
+	PF->format(&in, "i,m", style, rin, sizeof(grect_t));
 
 	int res = ipc_call(x->xwm_pid, XWM_CNTL_GET_WIN_SPACE, &in, &out);
 	PF->clear(&in);
@@ -967,11 +960,6 @@ static int x_win_space(x_t* x, proto_t* in, proto_t* out) {
 	proto_read_to(in, &r, sizeof(grect_t));
 	get_xwm_win_space(x, style, &r, &r); 
 	PF->add(out, &r, sizeof(grect_t));
-	return 0;
-}
-
-static int x_get_theme(x_t* x, proto_t* out) {
-	PF->adds(out, x->config.theme);
 	return 0;
 }
 
@@ -1414,9 +1402,6 @@ static int xserver_dev_cntl(int from_pid, int cmd, proto_t* in, proto_t* ret, vo
 	else if(cmd == X_DCNTL_GET_EVT) {
 		x_get_event(from_pid, ret);
 	}
-	else if(cmd == X_DCNTL_GET_THEME) {
-		x_get_theme(x, ret);
-	}
 	else if(cmd == X_DCNTL_GET_DESKTOP_SPACE) {
 		x_get_desktop_space(x, in, ret);
 	}
@@ -1468,15 +1453,16 @@ int main(int argc, char** argv) {
 	x_t x;
 	if(x_init(&x, display_man, display_index) != 0)
 		return -1;
+	x_theme_t theme;
+	x_get_theme(&theme);
 
 	read_config(&x, "/etc/x/x.conf");
-	cursor_init(x.config.theme, &x.cursor);
+	cursor_init(theme.name, &x.cursor);
 
 	int pid = -1;
 	if(x.config.xwm[0] != 0) {
 		pid = fork();
 		if(pid == 0) {
-			setenv("XTHEME", x.config.theme);
 			proc_exec(x.config.xwm);
 		}
 		ipc_wait_ready(pid);

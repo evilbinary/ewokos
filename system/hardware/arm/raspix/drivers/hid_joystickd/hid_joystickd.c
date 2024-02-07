@@ -25,7 +25,7 @@ static int joystick_read(int fd, int from_pid, fsinfo_t* node,
 		last_state = key_state;
 		return 1;
 	}
-	return ERR_RETRY;
+	return VFS_ERR_RETRY;
 }
 
 typedef struct {
@@ -45,7 +45,11 @@ static int loop(void* p) {
 	(void)p;
 
 	uint8_t buf[8];
-	if(read(hid, buf, 7) == 7){
+	ipc_disable();
+	int res = read(hid, buf, 7);
+	ipc_enable();
+
+	if(res == 7){
 		//klog("joy: %02x %02x %02x %02x %02x %02x %02x %02x\n", 
 		//buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
 		joystick_t *joy = (joystick_t*)&buf;
@@ -72,6 +76,7 @@ static int loop(void* p) {
 
 		proc_wakeup(RW_BLOCK_EVT);
 	}
+	usleep(10000);
 	return 0;
 }
 
@@ -88,7 +93,7 @@ int main(int argc, char** argv) {
 	const char* mnt_point = argc > 1 ? argv[1]: "/dev/joystick0";
 	const char* dev_point = argc > 2 ? argv[2]: "/dev/hid0";
 
-	hid = open(dev_point, O_RDONLY);
+	hid = open(dev_point, O_RDONLY | O_NONBLOCK);
 	set_report_id(hid, 0x14);
 
 	vdevice_t dev;

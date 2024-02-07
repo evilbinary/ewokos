@@ -1,8 +1,18 @@
-#include <stdlib.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
 #include <fcntl.h>
 #include <stdio.h>
-#include <string.h>
+#include <sys/errno.h>
+
+#ifdef __cplusplus
+}
+#endif
+
 #include <gterminal/gterminal.h>
 #include <sconf/sconf.h>
 #include <ewoksys/vfs.h>
@@ -216,6 +226,10 @@ static int run(int argc, char* argv[]) {
 	return 0;
 }
 
+#ifdef __cplusplus
+extern "C" { extern int setenv(const char*, const char*);}
+#endif
+
 int main(int argc, char* argv[]) {
 	(void)argc;
 	(void)argv;
@@ -242,8 +256,10 @@ int main(int argc, char* argv[]) {
 	close(fds1[1]);
 	close(fds2[0]);
 	close(fds2[1]);
-	//setenv("CONSOLE", "xconsole", 1);
-	//setenv("CONSOLE_ID", "console-x", 1);
+
+	char console[16];
+	snprintf(console, 15, "xterm-%d", getpid());
+	setenv("CONSOLE_ID", console);
 
 	return proc_exec("/bin/shell");
 }

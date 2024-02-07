@@ -14,6 +14,7 @@
 #include <sys/errno.h>
 #include <reent.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <syscalls.h>
 #include <ewoksys/syscall.h>
@@ -258,21 +259,24 @@ int __attribute__((weak))
 _read (int fd, void * buf, size_t size)
 {
 	fsinfo_t info;
-	fsfile_t* file = vfs_get_file(fd);
-
-	if(file->flags == -1)
-	 		return -1;
-
 	if(vfs_get_by_fd(fd, &info) != 0)
 		return -1;
+
+	int flags = vfs_get_flags(fd);
+	if(flags == -1)
+	 		return -1;
+
+	bool block = true;
+	if(flags & O_NONBLOCK)
+		block = false;
 
 	int res = -1;
 	if(info.type == FS_TYPE_PIPE) {
 		while(1) {
-			res = vfs_read_pipe(fd, info.node, buf, size, true);
+			res = vfs_read_pipe(fd, info.node, buf, size, block);
 			if(res >= 0 || errno != EAGAIN)
 				break;
-			if(file->flags & O_NONBLOCK)
+			if(!block)
 				break;
 		}
 		return res;
@@ -280,19 +284,12 @@ _read (int fd, void * buf, size_t size)
 
 	while(1) {
 		res = vfs_read(fd, &info, buf, size);
-		if(res >= 0 || errno == EAGAIN_NON_BLOCK) {
-			errno = EAGAIN;
+		if(res >= 0)
 			break;
-		}
 
-		if(file->flags & O_NONBLOCK)
-		   break;
-
-		if(errno == EAGAIN)
-			proc_block_by(info.mount_pid, RW_BLOCK_EVT);
-
-		if (res < 0) /* let user handle those erro id*/
+		if(errno != EAGAIN || !block)
 			break;
+		proc_block_by(info.mount_pid, RW_BLOCK_EVT);
 	}
 	return res;
 }
@@ -321,21 +318,23 @@ int __attribute__((weak))
 _write (int fd, const void * buf, size_t size)
 {
 	fsinfo_t info;
-	fsfile_t* file = vfs_get_file(fd);
-
-	if(file->flags == -1)
-		return -1;
-
 	if(vfs_get_by_fd(fd, &info) != 0)
 		return -1;
+
+	int flags = vfs_get_flags(fd);
+	if(flags == -1)
+	 		return -1;
+	bool block = true;
+	if(flags & O_NONBLOCK)
+		block = false;
 
 	int res = -1;
 	if(info.type == FS_TYPE_PIPE) {
 		while(1) {
-			res = vfs_write_pipe(fd, info.node, buf, size, true);
+			res = vfs_write_pipe(fd, info.node, buf, size, block);
 			if(res >= 0 || errno != EAGAIN)
 				break;
-			if(file->flags & O_NONBLOCK)
+			if(!block)
 				break;
 		}
 		return res;
@@ -343,23 +342,15 @@ _write (int fd, const void * buf, size_t size)
 
 	while(1) {
 		res = vfs_write(fd, &info, buf, size);
-		if(res >= 0 || errno == EAGAIN_NON_BLOCK) {
-			errno = EAGAIN;
+		if(res >= 0)
 			break;
-		}
 
-		if(file->flags & O_NONBLOCK)
-		   break;
-
-		if(errno == EAGAIN)
-			proc_block_by(info.mount_pid, RW_BLOCK_EVT);
-
-		if (res < 0) /* let user handle those erro id*/
+		if(errno != EAGAIN || !block)
 			break;
+		proc_block_by(info.mount_pid, RW_BLOCK_EVT);
 	}
 	return res;
 }
-
 
 int
 _open (const char * fname, int oflag, ...)
@@ -461,9 +452,7 @@ _fstat (int fd, struct stat * st)
 {
   memset (st, 0, sizeof (* st));
   fsinfo_t info;
-  int res  = vfs_get_by_fd(fd, &info);
-
-  if (res != 0)
+  if(vfs_get_by_fd(fd, &info) != 0)
     return -1;
   /* Return the file size. */
   st->st_uid = info.stat.uid;
@@ -480,18 +469,23 @@ _fstat (int fd, struct stat * st)
 int __attribute__((weak))
 _stat (const char *fname, struct stat *st)
 {
-  //kout(__func__);
-  int fd, res;
   memset (st, 0, sizeof (* st));
   /* The best we can do is try to open the file readonly.  If it exists,
      then we can guess a few things about it.  */
-  if ((fd = _open (fname, O_RDONLY)) == -1)
+	fsinfo_t info;
+	if(vfs_get_by_name(fname, &info) != 0) {
     return -1;
-  st->st_mode |= S_IFREG | S_IREAD;
-  res = _fstat (fd, st);
+	}
+  st->st_uid = info.stat.uid;
+  st->st_gid = info.stat.gid;
+  st->st_size = info.stat.size;
+  st->st_mode = info.stat.mode;
+  st->st_atime = info.stat.atime;
+  st->st_ctime = info.stat.ctime;
+  st->st_mtime = info.stat.mtime;
+  st->st_nlink = info.stat.links_count;
   /* Not interested in the error.  */
-  _close (fd); 
-  return res;
+  return 0;
 }
 
 int __attribute__((weak))

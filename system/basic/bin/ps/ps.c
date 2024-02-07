@@ -41,10 +41,10 @@ static const char* get_owner(procinfo_t* proc) {
 		return "kernel";
 
 	session_info_t info;
-	static char name[SESSION_USER_MAX+1];
+	static char name[SESSION_USER_MAX+1] = {0};
 
 	if(session_get_by_uid(proc->uid, &info) == 0)
-		sstrncpy(name, info.user, SESSION_USER_MAX);
+		strncpy(name, info.user, SESSION_USER_MAX);
 	else
 		snprintf(name, SESSION_USER_MAX, "%d", proc->uid);
 
@@ -90,8 +90,10 @@ int main(int argc, char* argv[]) {
 	}
 
 	procinfo_t cprocinfo;
-    if(proc_info(getpid(), &cprocinfo) != 0)
+  if(proc_info(getpid(), &cprocinfo) != 0)
 		return -1;
+	
+	int uid = getuid();
 
 	int num = 0;
 	uint32_t core_idle[16]; //max 16 cores;
@@ -118,7 +120,7 @@ int main(int argc, char* argv[]) {
 				continue;
 			}
 
-			if(proc->uid > 0 && proc->uid != cprocinfo.uid && all == 0) //for current uid
+			if(uid > 0 && proc->uid != cprocinfo.uid && all == 0) //for current uid
 				continue;
 
 			if(proc->type != PROC_TYPE_PROC && thread == 0) //for thread 

@@ -1,5 +1,6 @@
 #include <ewoksys/devcmd.h>
 #include <ewoksys/ipc.h>
+#include <ewoksys/vdevice.h>
 #include <sys/shm.h>
 #include <sys/errno.h>
 #include <unistd.h>
@@ -118,10 +119,12 @@ int dev_read(int dev_pid, int fd, fsinfo_t* info, int32_t offset, void* buf, uin
 		int rd = proto_read_int(&out);
 		res = rd;
 		if(rd > 0) {
+			if(rd > size)
+				rd = size;
 			if(shm_id != -1 && shm != NULL)
 				memcpy(buf, shm, rd);
 			else
-				proto_read_to(&out, buf, size);
+				proto_read_to(&out, buf, rd);
 		}
 	}
 	PF->clear(&in);
@@ -304,7 +307,7 @@ int dev_read_block(int pid, void* buf, uint32_t size, int32_t index) {
 		if(rd > 0) {
 			memcpy(buf, shm, rd);
 		}
-		if(res == ERR_RETRY) {
+		if(res == VFS_ERR_RETRY) {
 			errno = EAGAIN;
 			res = -1;
 		}

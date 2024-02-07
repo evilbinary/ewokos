@@ -7,6 +7,7 @@
 #include <ewoksys/syscall.h>
 #include <ewoksys/keydef.h>
 #include <ewoksys/ipc.h>
+#include <ewoksys/vfs.h>
 #include <ewoksys/mmio.h>
 
 #define SARADC_CTRL_CHN_MASK        (0x7)
@@ -163,7 +164,8 @@ static int joystick_read(int fd, int from_pid, fsinfo_t* node,
 				break;
 		}
 	}
-	return key_cnt > 0 ? key_cnt : ERR_RETRY_NON_BLOCK;
+	//return key_cnt > 0 ? key_cnt : VFS_ERR_RETRY;
+	return key_cnt > 0 ? key_cnt : -1;
 }
 
 static void init_gpio(void) {
