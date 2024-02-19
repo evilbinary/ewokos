@@ -3,7 +3,7 @@ all: builtin_apps
 
 builtin_apps:
 	cd cp;make
-	cd rundev;make
+	cd ipcserv;make
 	cd test;make
 	cd tsaver;make
 	cd clear;make
@@ -15,6 +15,7 @@ builtin_apps:
 	cd shell;make
 	cd ls;make
 	cd login;make
+	cd md5;make
 	cd session;make
 	cd mount;make
 	cd uname;make
@@ -26,6 +27,7 @@ builtin_apps:
 	cd chown;make
 	cd whoami;make
 	cd mkdir;make
+	cd mkfifo;make
 	cd grep;make
 	cd rx;make
 	cd elfinfo;make
@@ -33,7 +35,7 @@ builtin_apps:
 
 clean:
 	cd cp;make clean
-	cd rundev;make clean
+	cd ipcserv;make clean
 	cd test;make clean
 	cd tsaver;make clean
 	cd clear;make clean
@@ -45,6 +47,7 @@ clean:
 	cd shell;make clean
 	cd ls;make clean
 	cd login;make clean
+	cd md5;make clean
 	cd session;make clean
 	cd mount;make clean
 	cd uname;make clean
@@ -55,6 +58,7 @@ clean:
 	cd chmod;make clean
 	cd chown;make clean
 	cd mkdir;make clean
+	cd mkfifo;make clean
 	cd grep;make clean
 	cd rx;make clean
 	cd elfinfo;make clean

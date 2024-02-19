@@ -54,6 +54,14 @@ class XTerm : public XWin {
 		*/
 	}
 
+	bool readConfigRaw(const char* fname) {
+		sconf_t *sconf = sconf_load(fname);	
+		if(sconf == NULL)
+			return false;
+		theme.loadConfig(sconf);
+		sconf_free(sconf);
+		return true;
+	}
 public:
 	XTerm() {
 		gterminal_init(&terminal);
@@ -64,39 +72,14 @@ public:
 	}
 
 	bool readConfig(const char* fname) {
-		sconf_t *sconf = sconf_load(fname);	
-		if(sconf == NULL)
-			return false;
-
-		const char* v = sconf_get(sconf, "bg_color");
-		if(v[0] != 0) 
-			terminal.bg_color = strtoul(v, NULL, 16);
-
-		v = sconf_get(sconf, "fg_color");
-		if(v[0] != 0) 
-			terminal.fg_color = strtoul(v, NULL, 16);
-
-		uint32_t font_size = 16;
-		v = sconf_get(sconf, "font_size");
-		if(v[0] != 0) 
-			font_size = atoi(v);
-		terminal.font_size = font_size;
-		
-		v = sconf_get(sconf, "font_fixed");
-		if(v[0] != 0) 
-			terminal.font_fixed = atoi(v);
-		if(terminal.font_fixed == 0)
-			terminal.font_fixed = font_size;
-
-		v = sconf_get(sconf, "font");
-		if(v[0] == 0) 
-			v = DEFAULT_SYSTEM_FONT;
-		
+		readConfigRaw(fname);
+		terminal.bg_color = theme.basic.bgColor;
+		terminal.fg_color = theme.basic.fgColor;
+		terminal.font_size = theme.basic.fontSize;
+		terminal.font_fixed = theme.basic.fontFixedSize;
 		if(terminal.font != NULL)
 			font_free(terminal.font);
-		terminal.font = font_new(v, font_size, true);
-
-		sconf_free(sconf);
+		terminal.font = font_new(theme.basic.fontName, terminal.font_size, true);
 		return true;
 	}
 
@@ -231,8 +214,9 @@ extern "C" { extern int setenv(const char*, const char*);}
 #endif
 
 int main(int argc, char* argv[]) {
-	(void)argc;
-	(void)argv;
+	const char* cmd = "/bin/shell";
+	if(argc > 1)
+		cmd = argv[1];
 
 	int fds1[2];
 	int fds2[2];
@@ -251,6 +235,7 @@ int main(int argc, char* argv[]) {
 	}
 	//child proc for p1 writer
 	dup2(fds1[1], 1);
+	dup2(fds1[1], 2);
 	dup2(fds2[0], 0);
 	close(fds1[0]);
 	close(fds1[1]);
@@ -261,5 +246,5 @@ int main(int argc, char* argv[]) {
 	snprintf(console, 15, "xterm-%d", getpid());
 	setenv("CONSOLE_ID", console);
 
-	return proc_exec("/bin/shell");
+	return proc_exec(cmd);
 }

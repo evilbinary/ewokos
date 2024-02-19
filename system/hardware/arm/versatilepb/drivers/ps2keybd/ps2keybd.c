@@ -71,17 +71,19 @@ static inline void empty(void) {
 static int32_t keyb_handle(uint8_t scode) {
 	if(scode == 0)
 		return 0;
-
 	char c = 0;
 	//handle release event and key value
 	if(scode == 0xF0) { //release event
 		scode = get_scode(); // scan released code
-		if(_held[scode] == 1 && scode)  
-			_held[scode] = 0;
 		empty(); //set empty data
-		return 0;
+		if(scode <= 127 && _held[scode] == 1 && scode)  
+			_held[scode] = 0;
+		return -1; //release 
 	}
 	else if(scode == 0xFA) //empty data
+		return 0;
+	
+	if(scode > 127)
 		return 0;
 
 	_held[scode] = 1;
@@ -109,35 +111,28 @@ static int keyb_read(int fd, int from_pid, fsinfo_t* node,
 	char c;
 	int res = charbuf_pop(_buffer, &c);
 
-	if(res != 0 || c == 0)
+	if(res != 0)
 		return VFS_ERR_RETRY;
 
 	((char*)buf)[0] = c;
 	return 1;
 }
 
-static int loop(void* p) {
+static void interrupt_handle(uint32_t interrupt, uint32_t p) {
 	(void)p;
 	uint8_t key_scode = get_scode();
-	char c = keyb_handle(key_scode);
+	int32_t c = keyb_handle(key_scode);
 	if(c != 0) {
-		charbuf_push(_buffer, c, true);
-		proc_wakeup(RW_BLOCK_EVT);
-	}
-	proc_usleep(20000);
-	return 0;
-}
+		if(c == -1) //release
+			c = 0;
 
-/*static void timer_handler(void) {
-	uint8_t key_scode = get8(KEYBOARD_BASE+KDATA);
-	char c = keyb_handle(key_scode);
-	if(c != 0) {
 		charbuf_push(_buffer, c, true);
 		proc_wakeup(RW_BLOCK_EVT);
 	}
 	return;
 }
-*/
+
+#define IRQ_RAW_KEYB (32+3) //VPB keyb interrupt at SIC bit3
 
 int main(int argc, char** argv) {
 	const char* mnt_point = argc > 1 ? argv[1]: "/dev/keyb0";
@@ -149,11 +144,9 @@ int main(int argc, char** argv) {
 	memset(&dev, 0, sizeof(vdevice_t));
 	strcpy(dev.name, "keyb");
 	dev.read = keyb_read;
-	dev.loop_step = loop;
 
-	//uint32_t tid = timer_set(5000, timer_handler);
+	sys_interrupt_setup(IRQ_RAW_KEYB, interrupt_handle, 0);
 	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0444);
-	//timer_remove(tid);
 	charbuf_free(_buffer);
 	return 0;
 }
