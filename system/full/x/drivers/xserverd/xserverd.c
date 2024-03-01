@@ -5,6 +5,7 @@
 #include <string.h>
 #include <ewoksys/vfs.h>
 #include <ewoksys/vdevice.h>
+#include <ewoksys/core.h>
 #include <ewoksys/syscall.h>
 #include <sys/shm.h>
 #include <fb/fb.h>
@@ -1387,22 +1388,35 @@ static int xserver_win_close(int fd, int from_pid, uint32_t node, void* p) {
 	return 0;
 }
 
+static int _last_ux = 0;
 int xserver_step(void* p) {
 	x_t* x = (x_t*)p;
 	ipc_disable();
 	check_wins(x);
-	for(uint32_t i=0; i<x->display_num; i++) {
-		x_repaint(x, i);
+
+	if(core_get_ux() == 8) {
+		for(uint32_t i=0; i<x->display_num; i++) {
+			if(_last_ux == 0)
+				x_dirty(x, i);
+			x_repaint(x, i);
+		}
+		_last_ux = 8;
 	}
+	else 
+		_last_ux = 0;
 	ipc_enable();
 	proc_usleep(1000000/x->config.fps);
 	return 0;
 }
 
+char* xserver_dev_cmd(int from_pid, int argc, char** argv, void* p);
+
 int main(int argc, char** argv) {
 	const char* mnt_point = argc > 1 ? argv[1]: "/dev/x";
 	const char* display_man = argc > 2 ? argv[2]: "/dev/display";
 	const int32_t display_index = argc > 3 ? atoi(argv[3]): -1;
+
+	core_set_ux(8);
 
 	x_t x;
 	if(x_init(&x, display_man, display_index) != 0)
@@ -1420,6 +1434,7 @@ int main(int argc, char** argv) {
 	dev.close = xserver_win_close;
 	dev.open = xserver_win_open;
 	dev.dev_cntl = xserver_dev_cntl;
+	dev.cmd = xserver_dev_cmd;
 	dev.loop_step = xserver_step;
 	dev.extra_data = &x;
 

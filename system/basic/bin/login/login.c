@@ -23,13 +23,14 @@ static void input(str_t* s, bool show) {
 	while(true) {
 		int i = read(0, &c, 1);
 		if(i <= 0 || c == 0) {
-		 	if(errno != EAGAIN)
+		 	//if(errno != EAGAIN)
+			if(i == 0)
 			 	break;
 			proc_usleep(30000);
 			continue;
 		}	
 
-		if (c == KEY_BACKSPACE) {
+		if (c == KEY_BACKSPACE || c == CONSOLE_LEFT) {
 			if (s->len > 0) {
 				//delete last char
 				if(show) {

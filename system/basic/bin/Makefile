@@ -10,6 +10,7 @@ builtin_apps:
 	cd echo;make
 	cd sleep;make
 	cd ps;make
+	cd devcmd;make
 	cd svcinfo;make
 	cd cat;make
 	cd shell;make
@@ -32,6 +33,7 @@ builtin_apps:
 	cd rx;make
 	cd elfinfo;make
 	cd httpd;make 
+	cd setux;make 
 
 clean:
 	cd cp;make clean
@@ -42,6 +44,7 @@ clean:
 	cd echo;make clean
 	cd sleep;make clean
 	cd ps;make clean
+	cd devcmd;make clean
 	cd svcinfo;make clean
 	cd cat;make clean
 	cd shell;make clean
@@ -64,3 +67,4 @@ clean:
 	cd elfinfo;make clean
 	cd httpd;make clean
 	cd whoami;make clean
+	cd setux;make clean
