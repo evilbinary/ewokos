@@ -23,8 +23,7 @@ int main(int argc, char** argv) {
 	dup2(fd, 2);
 	close(fd);
 
-	char cmd[128];
-	snprintf(cmd, 127, "/bin/session -t %s", dev);
-	proc_exec(cmd);
+	setenv("CONSOLE_ID", dev);
+	proc_exec("/bin/session");
 	return 0;
 }
