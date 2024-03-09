@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 
-static fsfile_t _fsfiles[PROC_FILE_MAX];
+static fsfile_t _fsfiles[MAX_OPEN_FILE_PER_PROC];
 
 static int vfs_get_by_fd_raw(int fd, fsinfo_t* info) {
 	proto_t in, out;
@@ -57,13 +57,13 @@ static int vfs_set_info(fsinfo_t* info) {
 }
 
 void  vfs_init(void) {
-	for(uint32_t i=0; i<PROC_FILE_MAX; i++) {
+	for(uint32_t i=0; i<MAX_OPEN_FILE_PER_PROC; i++) {
 		memset(&_fsfiles[i], 0, sizeof(fsfile_t));
 	}
 }
 
 static inline fsfile_t* vfs_set_file(int fd, fsinfo_t* info) {
-	if(fd < 0 || fd >= PROC_FILE_MAX)
+	if(fd < 0 || fd >= MAX_OPEN_FILE_PER_PROC)
 		return NULL;
 	fsfile_t* file = &_fsfiles[fd];
 	memcpy(&file->info, info, sizeof(fsinfo_t));
@@ -71,20 +71,20 @@ static inline fsfile_t* vfs_set_file(int fd, fsinfo_t* info) {
 }
 
 static inline void vfs_update_file(fsinfo_t* info) {
-	for(uint32_t i=0; i<PROC_FILE_MAX; i++) {
+	for(uint32_t i=0; i<MAX_OPEN_FILE_PER_PROC; i++) {
 		if(_fsfiles[i].info.node == info->node)
 			memcpy(&_fsfiles[i].info, info, sizeof(fsinfo_t));
 	}
 }
 
 static inline void vfs_clear_file(int fd) {
-	if(fd < 0 || fd >= PROC_FILE_MAX)
+	if(fd < 0 || fd >= MAX_OPEN_FILE_PER_PROC)
 		return;
 	memset(&_fsfiles[fd], 0, sizeof(fsfile_t));
 }
 
 static fsfile_t* vfs_get_file(int fd) {
-	if(fd < 0 || fd >= PROC_FILE_MAX)
+	if(fd < 0 || fd >= MAX_OPEN_FILE_PER_PROC)
 		return NULL;
 
 	fsfile_t* ret = &_fsfiles[fd];
@@ -187,10 +187,9 @@ int vfs_get_by_node(uint32_t node, fsinfo_t* info) {
 	return res;
 }
 
-int vfs_new_node(fsinfo_t* info, uint32_t node_to) {
+int vfs_new_node(fsinfo_t* info, uint32_t node_to, bool vfs_node_only) {
 	proto_t in, out;
-	//PF->init(&in)->add(&in, info, sizeof(fsinfo_t))->addi(&in, node_to);
-	PF->format(&in, "m,i", info, sizeof(fsinfo_t), node_to);
+	PF->format(&in, "m,i,i", info, sizeof(fsinfo_t), node_to, vfs_node_only);
 	PF->init(&out);
 	int res = ipc_call(get_vfsd_pid(), VFS_NEW_NODE, &in, &out);
 	PF->clear(&in);
@@ -293,7 +292,7 @@ static int write_pipe(int fd, uint32_t node, const void* buf, uint32_t size, boo
 int vfs_close_info(int fd) {
 	proto_t in;
 	PF->init(&in)->addi(&in, fd);
-	int res = ipc_call_wait(get_vfsd_pid(), VFS_CLOSE, &in);
+	int res = ipc_call(get_vfsd_pid(), VFS_CLOSE, &in, NULL);
 	PF->clear(&in);
 	return res;
 }
@@ -303,7 +302,7 @@ int vfs_close(int fd) {
 	if(file == NULL)
 		return -1;
 	if((file->info.state & FS_STATE_CHANGED) != 0) {
-		if(vfs_update(&file->info) != 0)
+		if(vfs_update(&file->info, true) != 0)
 			return -1;
 	}
 
@@ -423,9 +422,11 @@ fsinfo_t* vfs_kids(uint32_t node, uint32_t *num) {
 	return ret;
 }
 
-int vfs_update(fsinfo_t* info) {
-	if(dev_set(info->mount_pid, info) != 0)
-		return -1;
+int vfs_update(fsinfo_t* info, bool do_dev) {
+	if(do_dev) {
+		if(dev_set(info->mount_pid, info) != 0)
+			return -1;
+	}
 
 	if(vfs_set_info(info) != 0)
 		return -1;
@@ -590,7 +591,7 @@ int vfs_create(const char* fname, fsinfo_t* ret, int type, int mode, bool vfs_no
 	fi.stat.gid = getgid();
 	fi.stat.mode = mode;
 
-	if(vfs_new_node(&fi, info_to.node) != 0)
+	if(vfs_new_node(&fi, info_to.node, vfs_node_only) != 0)
 		return -1;
 
 	if(vfs_node_only) {//only create in vfs service, not existed in storage. 
@@ -680,6 +681,7 @@ int vfs_read_pipe(int fd, uint32_t node, void* buf, uint32_t size, bool block) {
 
 #define SHM_ON 128
 int vfs_read(int fd, fsinfo_t *info, void* buf, uint32_t size) {
+	errno = 0;
 	int offset = 0;
 	if(info->type == FS_TYPE_FILE) {
 		offset = vfs_tell(fd);

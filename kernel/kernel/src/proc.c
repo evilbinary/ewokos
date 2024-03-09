@@ -18,13 +18,14 @@
 #include <stddef.h>
 #include <signals.h>
 
-static proc_t _proc_table[PROC_MAX];
+static proc_t _proc_table[MAX_PROC_NUM];
 __attribute__((__aligned__(PAGE_DIR_SIZE))) 
-static page_dir_entry_t _proc_vm[PROC_MAX][PAGE_DIR_NUM];
+static page_dir_entry_t _proc_vm[MAX_PROC_NUM][PAGE_DIR_NUM];
 static queue_t _ready_queue[CPU_MAX_CORES];
 static proc_t* _current_proc[CPU_MAX_CORES];
 static uint32_t _use_core_id = 0;
 static uint32_t _proc_uuid = 0;
+static int32_t _last_create_pid = 0;
 
 bool _core_proc_ready = false;
 int32_t _core_proc_pid = -1;
@@ -37,7 +38,7 @@ void procs_init(void) {
 	_proc_uuid = 0;
 	_core_proc_ready = false;
 	int32_t i;
-	for (i = 0; i < PROC_MAX; i++) {
+	for (i = 0; i < MAX_PROC_NUM; i++) {
 		_proc_table[i].info.state = UNUSED;
 		_proc_table[i].info.wait_for = -1;
 	}
@@ -59,7 +60,7 @@ int32_t  proc_childof(proc_t* proc, proc_t* parent) {
 }
 
 inline proc_t* proc_get(int32_t pid) {
-	if(pid < 0 || pid >= PROC_MAX ||
+	if(pid < 0 || pid >= MAX_PROC_NUM ||
 			_proc_table[pid].info.state == UNUSED ||
 			_proc_table[pid].info.state == ZOMBIE)
 		return NULL;
@@ -68,7 +69,7 @@ inline proc_t* proc_get(int32_t pid) {
 
 inline proc_t* proc_get_by_uuid(uint32_t uuid) {
 	proc_t* proc = NULL;
-	for (uint32_t i = 0; i < PROC_MAX; i++) {
+	for (uint32_t i = 0; i < MAX_PROC_NUM; i++) {
 		if(_proc_table[i].info.uuid == uuid) {
 			proc = &_proc_table[i];
 			break;
@@ -128,12 +129,12 @@ static void unmap_stack(proc_t* proc, uint32_t* stacks, uint32_t base, uint32_t 
 
 inline uint32_t thread_stack_alloc(proc_t* proc) {
 	uint32_t i;
-	for(i=0; i<THREAD_MAX; i++) {
+	for(i=0; i<MAX_THREAD_NUM_PER_PROC; i++) {
 		if(proc->space->thread_stacks[i].base == 0)
 			break;
 	}
 
-	if(i >= THREAD_MAX) {
+	if(i >= MAX_THREAD_NUM_PER_PROC) {
 		kprintf("thread stack alloc failed(pid %d)!\n", proc->info.pid);
 		return 0;
 	}
@@ -147,11 +148,11 @@ inline uint32_t thread_stack_alloc(proc_t* proc) {
 
 inline void thread_stack_free(proc_t* proc, uint32_t base) {
 	uint32_t i;
-	for(i=0; i<THREAD_MAX; i++) {
+	for(i=0; i<MAX_THREAD_NUM_PER_PROC; i++) {
 		if(proc->space->thread_stacks[i].base == base)
 			break;
 	}
-	if(i >= THREAD_MAX) 
+	if(i >= MAX_THREAD_NUM_PER_PROC) 
 		return;
 	unmap_stack(proc, proc->space->thread_stacks[i].stacks, base, THREAD_STACK_PAGES);
 	proc->space->thread_stacks[i].base = 0;
@@ -363,7 +364,7 @@ static inline void proc_unready(proc_t* proc, int32_t state) {
 
 static void proc_wakeup_waiting(int32_t pid) {
 	int32_t i;
-	for (i = 0; i < PROC_MAX; i++) {
+	for (i = 0; i < MAX_PROC_NUM; i++) {
 		proc_t *proc = &_proc_table[i];
 		if (proc->info.state == WAIT && proc->info.wait_for == pid) {
 			proc->info.wait_for = -1;
@@ -382,7 +383,7 @@ static void proc_terminate(context_t* ctx, proc_t* proc) {
 	if(proc->info.type == PROC_TYPE_PROC) {
 		kev_push(KEV_PROC_EXIT, proc->info.pid, 0, 0);
 		int32_t i;
-		for (i = 0; i < PROC_MAX; i++) {
+		for (i = 0; i < MAX_PROC_NUM; i++) {
 			proc_t *p = &_proc_table[i];
 			/*terminate forked from this proc*/
 			if(p->info.father_pid == proc->info.pid) { //terminate forked children, skip reloaded ones
@@ -482,7 +483,7 @@ void proc_funeral(proc_t* proc) {
 
 inline void proc_zombie_funeral(void) {
 	int32_t i;
-	for (i = 0; i < PROC_MAX; i++) {
+	for (i = 0; i < MAX_PROC_NUM; i++) {
 		proc_t *p = &_proc_table[i];
 		if(p->info.state == ZOMBIE)
 			proc_funeral(p);
@@ -572,14 +573,19 @@ static inline void core_attach(proc_t* proc) {
 proc_t *proc_create(int32_t type, proc_t* parent) {
 	int32_t index = -1;
 	uint32_t i;
-	for (i = 0; i < PROC_MAX; i++) {
-		if (_proc_table[i].info.state == UNUSED) {
-			index = i;
+
+	for (i = 0; i < MAX_PROC_NUM; i++) {
+		int32_t at = i + _last_create_pid;
+		if(at >= MAX_PROC_NUM)
+			at = at % MAX_PROC_NUM;
+		if (_proc_table[at].info.state == UNUSED) {
+			index = at;
 			break;
 		}
 	}
 	if (index < 0)
 		return NULL;
+	_last_create_pid = index+1;
 
 	proc_t *proc = &_proc_table[index];
 	memset(proc, 0, sizeof(proc_t));
@@ -744,7 +750,7 @@ static void proc_wakeup_all_state(int32_t pid_by, uint32_t event, proc_t* proc) 
 
 void proc_wakeup(int32_t pid_by, int32_t pid, uint32_t event) {
 	if(pid >= 0) {
-		if(pid >= PROC_MAX)
+		if(pid >= MAX_PROC_NUM)
 			return;
 		proc_t* proc = &_proc_table[pid];	
 		if(proc->info.state == UNUSED ||
@@ -759,7 +765,7 @@ void proc_wakeup(int32_t pid_by, int32_t pid, uint32_t event) {
 
 	int32_t i = 0;	
 	while(1) {
-		if(i >= PROC_MAX)
+		if(i >= MAX_PROC_NUM)
 			break;
 		proc_t* proc = &_proc_table[i];	
 		i++;
@@ -859,7 +865,7 @@ int32_t get_procs_num(void) {
 	proc_t* cproc = get_current_proc();
 	int32_t res = 0;
 	int32_t i;
-	for(i=0; i<PROC_MAX; i++) {
+	for(i=0; i<MAX_PROC_NUM; i++) {
 		if(_proc_table[i].info.state != UNUSED) 
 			res++;
 	}
@@ -872,7 +878,7 @@ int32_t get_procs(int32_t num, procinfo_t* procs) {
 
 	int32_t j = 0;
 	int32_t i;
-	for(i=0; i<PROC_MAX && j<(num); i++) {
+	for(i=0; i<MAX_PROC_NUM && j<(num); i++) {
 		if(_proc_table[i].info.state != UNUSED) {
 			proc_t* p = &_proc_table[i];
 			memcpy(&procs[j], &p->info, sizeof(procinfo_t));
@@ -896,7 +902,7 @@ int32_t get_proc(int32_t pid, procinfo_t *info) {
 static int32_t renew_sleep_counter(uint32_t usec) {
 	int i;
 	int32_t res = -1;
-	for(i=0; i<PROC_MAX; i++) {
+	for(i=0; i<MAX_PROC_NUM; i++) {
 		proc_t* proc = &_proc_table[i];
 		if(proc->schd_core_lock_counter > usec) {
 			proc->schd_core_lock_counter -= usec;
@@ -927,7 +933,7 @@ static uint32_t _k_sec_counter = 0;
 inline void renew_kernel_sec(void) {
 	int i;
 	_k_sec_counter++;
-	for(i=0; i<PROC_MAX; i++) {
+	for(i=0; i<MAX_PROC_NUM; i++) {
 		proc_t* proc = &_proc_table[i];
 		if(proc->info.state != UNUSED && 
 				proc->info.state != ZOMBIE) {

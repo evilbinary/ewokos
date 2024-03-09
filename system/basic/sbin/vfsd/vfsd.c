@@ -15,6 +15,7 @@
 #include <ewoksys/syscall.h>
 #include <ewoksys/hashmap.h>
 #include <procinfo.h>
+#include <sysinfo.h>
 
 typedef struct vfs_node {
   struct vfs_node* father;
@@ -41,12 +42,13 @@ static mount_t _vfs_mounts[FS_MOUNT_MAX];
 static map_t*  _nodes_hash = NULL;
 
 typedef struct {
-	file_t fds[PROC_FILE_MAX];
+	file_t fds[MAX_OPEN_FILE_PER_PROC];
 	uint32_t state;
 	uint32_t uuid;
 } proc_fds_t;
 
-static proc_fds_t _proc_fds_table[PROC_MAX];
+static proc_fds_t* _proc_fds_table = NULL;
+static uint32_t    _max_proc_num = 0;
 
 static void vfs_node_init(vfs_node_t* node) {
 	memset(node, 0, sizeof(vfs_node_t));
@@ -80,7 +82,12 @@ static void vfsd_init(void) {
 		memset(&_vfs_mounts[i], 0, sizeof(mount_t));
 	}
 
-	for(i = 0; i<PROC_MAX; i++) {
+	sys_info_t sysinfo;
+	syscall1(SYS_GET_SYS_INFO, (int32_t)&sysinfo);
+	_max_proc_num = sysinfo.max_proc_num;
+	_proc_fds_table = (proc_fds_t*)malloc(_max_proc_num*sizeof(proc_fds_t));
+
+	for(i = 0; i<_max_proc_num; i++) {
 		memset(&_proc_fds_table[i], 0, sizeof(proc_fds_t));
 	}
 
@@ -90,7 +97,7 @@ static void vfsd_init(void) {
 }
 
 static file_t* vfs_get_file(int32_t pid, int32_t fd) {
-	if(pid < 0 || pid >= PROC_MAX || fd < 0 || fd >= PROC_FILE_MAX)
+	if(pid < 0 || pid >= _max_proc_num || fd < 0 || fd >= MAX_OPEN_FILE_PER_PROC)
 		return NULL;
 	return &_proc_fds_table[pid].fds[fd];
 }
@@ -318,7 +325,7 @@ static void vfs_umount(int32_t pid, vfs_node_t* node) {
 	memset(&_vfs_mounts[node->mount_id], 0, sizeof(mount_t));
 }
 
-static int32_t vfs_del_node(int32_t pid, vfs_node_t* node) {
+static int32_t vfs_del_node(vfs_node_t* node) {
 	if(node == NULL || node->refs > 0)
 		return -1;
 	/*free children*/
@@ -327,7 +334,7 @@ static int32_t vfs_del_node(int32_t pid, vfs_node_t* node) {
 
 	while(c != NULL) {
 		vfs_node_t* next = c->next;
-		vfs_del_node(pid, c);
+		vfs_del_node(c);
 		c = next;
 	}
 
@@ -362,7 +369,7 @@ vfs_node_t* vfs_root(void) {
 
 static int32_t get_free_fd(int32_t pid) {
 	int32_t i;
-	for(i=3; i<PROC_FILE_MAX; i++) { //0, 1, 2 reserved for stdio in/out/err
+	for(i=3; i<MAX_OPEN_FILE_PER_PROC; i++) { //0, 1, 2 reserved for stdio in/out/err
 		if(_proc_fds_table[pid].fds[i].node == 0)
 			return i;
 	}
@@ -418,7 +425,8 @@ typedef struct st_close_event {
 	int fd;
 	int owner_pid;
 	int dev_pid;
-	fsinfo_t info;
+	bool del_node;
+	vfs_node_t* node;
 
 	struct st_close_event* next;
 } close_event_t;
@@ -436,7 +444,7 @@ static void push_close_event(close_event_t* ev) {
 	else
 		_event_head = e;
 	_event_tail = e;
-	proc_wakeup((uint32_t)_vfs_root);
+	proc_wakeup((uint32_t)_nodes_hash);
 }
 
 static int get_close_event(close_event_t *ev) {
@@ -444,7 +452,7 @@ static int get_close_event(close_event_t *ev) {
 	close_event_t *e = _event_head;
 	if (e == NULL) {
 		ipc_enable();
-		proc_block_by(getpid(), (uint32_t)_vfs_root);
+		proc_block_by(getpid(), (uint32_t)_nodes_hash);
 		return -1;
 	}
 
@@ -457,8 +465,7 @@ static int get_close_event(close_event_t *ev) {
 	return 0;
 }
 
-static void proc_file_close(int pid, int fd, file_t* file, bool close_dev) {
-	(void)close_dev;
+static void proc_file_close(int pid, int fd, file_t* file) {
 	(void)pid;
 	(void)fd;
 	if(file == NULL || file->node == NULL)
@@ -495,37 +502,36 @@ static void proc_file_close(int pid, int fd, file_t* file, bool close_dev) {
 		}
 		proc_wakeup(node_id);
 	}
-	if(!close_dev)
-		return;
 
 	int32_t to_pid = get_mount_pid(node);
-	if(to_pid < 0)
+	if(to_pid < 0) {
+		if(del_node)
+			vfs_del_node(node);
 		return;
+	}
 
 	close_event_t ev;
 	ev.fd = fd;
 	ev.owner_pid = pid;
 	ev.dev_pid = to_pid;
-	memcpy(&ev.info, &node->fsinfo, sizeof(fsinfo_t));
-
-	if(del_node)
-			vfs_del_node(pid, node);
+	ev.node = node;
+	ev.del_node = del_node;
 	push_close_event(&ev);
 }
 
 static void vfs_close(int32_t pid, int32_t fd) {
-	if(pid < 0 || fd < 0 || fd >= PROC_FILE_MAX)
+	if(pid < 0 || fd < 0 || fd >= MAX_OPEN_FILE_PER_PROC)
 		return;
 
 	file_t* f = vfs_check_fd(pid, fd);
 	if(f != NULL) {
-		proc_file_close(pid, fd, f, false);
+		proc_file_close(pid, fd, f);
 		memset(f, 0, sizeof(file_t));
 	}
 }
 
 static vfs_node_t* vfs_dup(int32_t pid, int32_t from, int32_t *ret) {
-	if(from < 0 || from > PROC_FILE_MAX)
+	if(from < 0 || from > MAX_OPEN_FILE_PER_PROC)
 		return NULL;
 	int32_t to = get_free_fd(pid);
 	if(to < 0)
@@ -555,8 +561,8 @@ static int32_t vfs_dup2(int32_t pid, int32_t from, int32_t to) {
 	if(from == to)
 		return f->node;
 
-	if(from < 0 || from > PROC_FILE_MAX ||
-			to < 0 || to > PROC_FILE_MAX)
+	if(from < 0 || from > MAX_OPEN_FILE_PER_PROC ||
+			to < 0 || to > MAX_OPEN_FILE_PER_PROC)
 		return NULL;
 
 	vfs_close(pid, to);
@@ -647,6 +653,7 @@ static void do_vfs_new_node(int pid, proto_t* in, proto_t* out) {
 	if(proto_read_to(in, &info, sizeof(fsinfo_t)) != sizeof(fsinfo_t))
 		return;
 	uint32_t node_to_id = (uint32_t)proto_read_int(in);
+	bool vfs_node_only = (bool)proto_read_int(in);
 
 	vfs_node_t* node_to = NULL;
 	if(node_to_id > 0) {
@@ -656,10 +663,12 @@ static void do_vfs_new_node(int pid, proto_t* in, proto_t* out) {
 			return;
 		}
 
-		if(vfs_check_access(pid, &node_to->fsinfo, W_OK) != 0 ||
-				vfs_check_access(pid, &node_to->fsinfo, X_OK) != 0) {
-			PF->addi(out, EPERM);
-			return;
+		if(!vfs_node_only) {
+			if(vfs_check_access(pid, &node_to->fsinfo, W_OK) != 0 ||
+					vfs_check_access(pid, &node_to->fsinfo, X_OK) != 0) {
+				PF->addi(out, EPERM);
+				return;
+			}
 		}
 	
 		if(vfs_get_by_name(node_to, info.name) != NULL) {//existed ! 
@@ -699,7 +708,9 @@ static void do_vfs_open(int32_t pid, proto_t* in, proto_t* out) {
 		return;
 	}
 
-	if((flags & O_WRONLY) != 0 && vfs_check_access(pid, &node->fsinfo, W_OK) != 0) {
+	if(((flags & O_WRONLY) != 0 ||
+			(flags & O_RDWR) != 0) &&
+			vfs_check_access(pid, &node->fsinfo, W_OK) != 0) {
 		PF->addi(out, EPERM);
 		return;
 	}
@@ -800,7 +811,7 @@ static void do_vfs_del_node(int32_t pid, proto_t* in, proto_t* out) {
 	if (node == NULL)
 		return;
 
-	int res = vfs_del_node(pid, node);
+	int res = vfs_del_node(node);
 	PF->clear(out)->addi(out, res);
 }
 
@@ -868,14 +879,14 @@ static void do_vfs_pipe_open(int32_t pid, proto_t* out) {
 
 	int32_t fd0 = vfs_open(pid, node, 1);
 	if(fd0 < 0) {
-		vfs_del_node(pid, node);
+		vfs_del_node(node);
 		return;
 	}
 
 	int32_t fd1 = vfs_open(pid, node, 1);
 	if(fd1 < 0) {
 		vfs_close(pid, fd0);
-		vfs_del_node(pid, node);
+		vfs_del_node(node);
 		return;
 	}
 	PF->clear(out)->addi(out, 0)->
@@ -971,10 +982,10 @@ static void vfs_proc_exit(int32_t cpid) {
 	if(cpid < 0)
 		return;
 	int32_t i;
-	for(i=0; i<PROC_FILE_MAX; i++) {
+	for(i=0; i<MAX_OPEN_FILE_PER_PROC; i++) {
 		file_t *f = &_proc_fds_table[cpid].fds[i];
 		if(f->node != NULL) {
-			proc_file_close(cpid, i, f, true);
+			proc_file_close(cpid, i, f);
 		}
 		memset(f, 0, sizeof(file_t));
 	}
@@ -995,7 +1006,7 @@ static void do_vfs_proc_clone(int32_t pid, proto_t* in) {
 	_proc_fds_table[cpid].uuid = proc_get_uuid(cpid);
 	
 	int32_t i;
-	for(i=0; i<PROC_FILE_MAX; i++) {
+	for(i=0; i<MAX_OPEN_FILE_PER_PROC; i++) {
 		file_t *f = &_proc_fds_table[fpid].fds[i];
 		vfs_node_t* node = 	vfs_get_node_by_id((uint32_t)f->node);
 		if(node != NULL) {
@@ -1011,7 +1022,7 @@ static void do_vfs_proc_clone(int32_t pid, proto_t* in) {
 /*
 static void check_procs(void) {
 	int32_t i;
-	for(i = 0; i<PROC_MAX; i++) {
+	for(i = 0; i<_max_proc_num; i++) {
 		if(_proc_fds_table[i].state != UNUSED) {
 			if(proc_get_uuid(i) != _proc_fds_table[i].uuid) {
 				vfs_proc_exit(i);
@@ -1024,7 +1035,7 @@ static void check_procs(void) {
 static void do_vfs_proc_exit(int32_t pid, proto_t* in) {
 	(void)pid;
 	int cpid = proto_read_int(in);
-	if(cpid < 0 || cpid >= PROC_MAX)
+	if(cpid < 0 || cpid >= _max_proc_num)
 		return;
 	vfs_proc_exit(cpid);
 }
@@ -1102,9 +1113,16 @@ static void handle(int pid, int cmd, proto_t* in, proto_t* out, void* p) {
 
 static int handle_close_event(close_event_t* ev) {
 	proto_t in;
-	PF->format(&in, "i,i,m", ev->fd, ev->owner_pid, &ev->info, sizeof(fsinfo_t));
-	int res = ipc_call(ev->dev_pid, FS_CMD_CLOSE, &in, NULL);
+	PF->format(&in, "i,i,i,i", ev->fd, ev->node, ev->del_node, ev->owner_pid);
+	//int res = ipc_call(ev->dev_pid, FS_CMD_CLOSE, &in, NULL);
+	int res = ipc_call_wait(ev->dev_pid, FS_CMD_CLOSE, &in);
 	PF->clear(&in);
+
+	if(ev->del_node) {
+		ipc_disable();
+		vfs_del_node(ev->node);
+		ipc_enable();
+	}
 	return res;
 }
 
@@ -1126,9 +1144,9 @@ int main(int argc, char** argv) {
 		close_event_t ev;
 		int res = get_close_event(&ev);
 		if(res == 0) {
-			ipc_disable();
+			//ipc_disable();
 			handle_close_event(&ev);
-			ipc_enable();
+			//ipc_enable();
 		}
 		else {
 			//ipc_disable();
@@ -1137,5 +1155,7 @@ int main(int argc, char** argv) {
 			//proc_usleep(3000);
 		}
 	}
+
+	free(_proc_fds_table);
 	return 0;
 }

@@ -195,13 +195,14 @@ static int32_t sys_proc_get_cmd(int32_t pid, char* cmd, int32_t sz) {
 
 static void sys_proc_set_cmd(const char* cmd) {
 	proc_t* cproc = get_current_proc();
-	sstrncpy(cproc->info.cmd, cmd, PROC_INFO_CMD_MAX-1);
+	sstrncpy(cproc->info.cmd, cmd, PROC_INFO_MAX_CMD_LEN-1);
 }
 
 static void	sys_get_sys_info(sys_info_t* info) {
 	if(info == NULL)
 		return;
 	memcpy(info, &_sys_info, sizeof(sys_info_t));
+	info->max_proc_num = MAX_PROC_NUM;
 }
 
 static void	sys_get_sys_state(sys_state_t* info) {
