@@ -167,7 +167,7 @@ net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net_dev
     struct net_protocol_queue_entry *entry;
 
     for (proto = protocols; proto; proto = proto->next) {
-        if (proto->type == type) {
+        if (proto->type == type || proto->type == NET_PROTOCOL_TYPE_RAW) {
             entry = memory_alloc(sizeof(*entry) + len);
             if (!entry) {
                 errorf("memory_alloc() failure");
@@ -181,10 +181,9 @@ net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net_dev
                 memory_free(entry);
                 return -1;
             }
-            debugf("queue pushed (num:%u), dev=%s, type=%s(0x%04x), len=%zd", proto->queue.num, dev->name, proto->name, type, len);
+            infof("queue pushed (num:%u), dev=%s, type=%s(0x%04x), len=%zd\n", proto->queue.num, dev->name, proto->name, type, len);
             debugdump(data, len);
-            raise_softirq(SIGUSR1);
-            return 0;
+            raise_softirq(SIGNET);
         }
     }
     /* unsupported protocol */
@@ -294,8 +293,8 @@ net_timer_handler(void)
 int
 net_interrupt(void)
 {
-	printf("interrupt\n");
-	raise_softirq(SIGUSR2);	
+	infof("interrupt\n");
+	raise_softirq(SIGINT);	
     /* getpid(2) and kill(2) are signal safety functions. see signal-safety(7). */
 }
 
@@ -333,13 +332,15 @@ net_run(void)
 {
     struct net_device *dev;
 
-    if (intr_run() == -1) {
-        errorf("intr_run() failure");
-        return -1;
-    }
+
     debugf("open all devices...");
     for (dev = devices; dev; dev = dev->next) {
         net_device_open(dev);
+    }
+
+    if (intr_run() == -1) {
+        errorf("intr_run() failure");
+        return -1;
     }
     debugf("running...");
     return 0;
@@ -368,6 +369,10 @@ net_init(void)
 {
     if (intr_init() == -1) {
         errorf("intr_init() failure");
+        return -1;
+    }
+    if (dhcp_init() == -1) {
+        errorf("raw_init() failure");
         return -1;
     }
     if (arp_init() == -1) {

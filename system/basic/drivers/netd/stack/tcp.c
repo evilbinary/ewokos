@@ -141,15 +141,15 @@ tcp_dump(const uint8_t *data, size_t len)
 #ifdef NET_DEBUG
     struct tcp_hdr *hdr;
     hdr = (struct tcp_hdr *)data;
-    printf( "        src: %u\n", ntoh16(hdr->src));
-    printf( "        dst: %u\n", ntoh16(hdr->dst));
-    printf( "        seq: %u\n", ntoh32(hdr->seq));
-    printf( "        ack: %u\n", ntoh32(hdr->ack));
-    printf( "        off: 0x%02x (%d)\n", hdr->off, (hdr->off >> 4) << 2);
-    printf( "        flg: 0x%02x (%s)\n", hdr->flg, tcp_flg_ntoa(hdr->flg));
-    printf( "        wnd: %u\n", ntoh16(hdr->wnd));
-    printf( "        sum: 0x%04x\n", ntoh16(hdr->sum));
-    printf( "         up: %u\n", ntoh16(hdr->up));
+    klog( "        src: %u\n", ntoh16(hdr->src));
+    klog( "        dst: %u\n", ntoh16(hdr->dst));
+    klog( "        seq: %u\n", ntoh32(hdr->seq));
+    klog( "        ack: %u\n", ntoh32(hdr->ack));
+    klog( "        off: 0x%02x (%d)\n", hdr->off, (hdr->off >> 4) << 2);
+    klog( "        flg: 0x%02x (%s)\n", hdr->flg, tcp_flg_ntoa(hdr->flg));
+    klog( "        wnd: %u\n", ntoh16(hdr->wnd));
+    klog( "        sum: 0x%04x\n", ntoh16(hdr->sum));
+    klog( "         up: %u\n", ntoh16(hdr->up));
 #ifdef HEXDUMP
     hexdump(stderr, data, len);
 #endif
@@ -335,8 +335,7 @@ tcp_output_segment(uint32_t seq, uint32_t ack, uint8_t flg, uint16_t wnd, uint8_
     uint16_t total;
     char ep1[IP_ENDPOINT_STR_LEN];
     char ep2[IP_ENDPOINT_STR_LEN];
-
-    uint8_t *buf = malloc(IP_PAYLOAD_SIZE_MAX);
+    uint8_t *buf = memory_alloc(IP_PAYLOAD_SIZE_MAX);
     if(!buf)
         return -1;
 
@@ -364,9 +363,11 @@ tcp_output_segment(uint32_t seq, uint32_t ack, uint8_t flg, uint16_t wnd, uint8_
         ip_endpoint_ntop(local, ep1, sizeof(ep1)), ip_endpoint_ntop(foreign, ep2, sizeof(ep2)), total, len);
     tcp_dump((uint8_t *)hdr, total);
 
-
+    TRACE();
     int ret = ip_output(IP_PROTOCOL_TCP, (uint8_t *)hdr, total, local->addr, foreign->addr);
+    TRACE();
     free(buf);
+    TRACE();
     if(ret < 0){
         errorf("ip_output() failure");
     }
@@ -394,7 +395,6 @@ tcp_segment_arrives(struct tcp_segment_info *seg, uint8_t flags, uint8_t *data, 
 {
     struct tcp_pcb *pcb, *new_pcb;
     int acceptable = 0;
-
     pcb = tcp_pcb_select(local, foreign);
     if (!pcb || pcb->state == TCP_PCB_STATE_CLOSED) {
         if (TCP_FLG_ISSET(flags, TCP_FLG_RST)) {
@@ -828,7 +828,9 @@ tcp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct 
     seg.wnd = ntoh16(hdr->wnd);
     seg.up = ntoh16(hdr->up);
     mutex_lock(&mutex);
+    debug_flag = 1;
     tcp_segment_arrives(&seg, hdr->flg, (uint8_t *)hdr + hlen, len - hlen, &local, &foreign);
+    debug_flag = 0;
     mutex_unlock(&mutex);
     return;
 }
@@ -975,9 +977,9 @@ tcp_state(int id)
     mutex_lock(&mutex);
     pcb = tcp_pcb_get(id);
     if (!pcb) {
-        errorf("pcb not found");
+        errorf("pcb not found %d\n", id);
         mutex_unlock(&mutex);
-        return -1;
+        return -17;
     }
     if (pcb->mode != TCP_PCB_MODE_RFC793) {
         errorf("not opened in rfc793 mode");
@@ -1025,9 +1027,9 @@ tcp_connect(int id, struct ip_endpoint *foreign)
     mutex_lock(&mutex);
     pcb = tcp_pcb_get(id);
     if (!pcb) {
-        errorf("pcb not found");
+        errorf("pcb not found %d\n", id);
         mutex_unlock(&mutex);
-        return -1;
+        return -17;
     }
     if (pcb->mode != TCP_PCB_MODE_SOCKET) {
         errorf("not opened in socket mode");
@@ -1114,9 +1116,9 @@ tcp_bind(int id, struct ip_endpoint *local)
     mutex_lock(&mutex);
     pcb = tcp_pcb_get(id);
     if (!pcb) {
-        errorf("pcb not found");
+        errorf("pcb not found %d\n", id);
         mutex_unlock(&mutex);
-        return -1;
+        return -17;
     }
     if (pcb->mode != TCP_PCB_MODE_SOCKET) {
         errorf("not opened in socket mode");
@@ -1143,9 +1145,9 @@ tcp_listen(int id, int backlog)
     mutex_lock(&mutex);
     pcb = tcp_pcb_get(id);
     if (!pcb) {
-        errorf("pcb not found");
+        errorf("pcb not found %d\n", id);
         mutex_unlock(&mutex);
-        return -1;
+        return -17;
     }
     if (pcb->mode != TCP_PCB_MODE_SOCKET) {
         errorf("not opened in socket mode");
@@ -1167,9 +1169,9 @@ tcp_accept(int id, struct ip_endpoint *foreign)
     mutex_lock(&mutex);
     pcb = tcp_pcb_get(id);
     if (!pcb) {
-        errorf("pcb not found");
+        errorf("pcb not found %d\n", id);
         mutex_unlock(&mutex);
-        return -1;
+        return -17;
     }
     if (pcb->mode != TCP_PCB_MODE_SOCKET) {
         errorf("not opened in socket mode");
@@ -1214,13 +1216,12 @@ tcp_send(int id, uint8_t *data, size_t len)
     ssize_t sent = 0;
     struct ip_iface *iface;
     size_t mss, cap, slen;
-
     mutex_lock(&mutex);
     pcb = tcp_pcb_get(id);
     if (!pcb) {
-        errorf("pcb not found");
+        errorf("pcb not found %d\n", id);
         mutex_unlock(&mutex);
-        return -1;
+        return -17;
     }
 RETRY:
     switch (pcb->state) {
@@ -1300,9 +1301,9 @@ tcp_receive(int id, uint8_t *buf, size_t size)
     mutex_lock(&mutex);
     pcb = tcp_pcb_get(id);
     if (!pcb) {
-        errorf("pcb not found");
+        errorf("pcb not found %d\n", id);
         mutex_unlock(&mutex);
-        return -1;
+        return -17;
     }
 RETRY:
     switch (pcb->state) {
@@ -1364,9 +1365,9 @@ tcp_close(int id)
     mutex_lock(&mutex);
     pcb = tcp_pcb_get(id);
     if (!pcb) {
-        errorf("pcb not found");
+        errorf("pcb not found %d\n", id);
         mutex_unlock(&mutex);
-        return -1;
+        return -17;
     }
     switch (pcb->state) {
     case TCP_PCB_STATE_CLOSED:

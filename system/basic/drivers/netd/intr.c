@@ -2,6 +2,8 @@
 #include <string.h>
 #include <time.h>
 #include <pthread.h>
+#include <ewoksys/vfs.h>
+#include <ewoksys/semaphore.h>
 
 #include "stack/util.h"
 #include "stack/net.h"
@@ -22,7 +24,7 @@ struct irq_entry *irq_vec;
 int
 intr_request_irq(unsigned int irq, int (*handler)(unsigned int irq, void *dev), int flags, const char *name, void *dev)
 {
-    printf("irq=%u, handler=%p, flags=%d, name=%s, dev=%p", irq, handler, flags, name, dev);
+    debugf("irq=%u, handler=%p, flags=%d, name=%s, dev=%p", irq, handler, flags, name, dev);
     struct irq_entry *entry;
     for (entry = irq_vec; entry; entry = entry->next) {
         if (entry->irq == irq) {
@@ -48,49 +50,81 @@ intr_request_irq(unsigned int irq, int (*handler)(unsigned int irq, void *dev), 
     return 0;
 }
 
-static int
-intr_timer_setup(struct itimerspec *interval)
-{
-
-}
-
-static int soft_signal = 0;
 struct irq_entry *irq_vec;
+#define NET_BLOCK_EVT 66666
+static uint32_t gSignel[SIGMAX] = {0};
+static pthread_mutex_t gMutex;
+int tid;
 
-static uint32_t gSignel = 0;
+int dflag [16];
+int dcnt = 0;
+int debug_flag = 0;
 
 void raise_softirq(uint32_t  sig){
-	//printf("put signal %d %d\n", sig_count, sig);
-    gSignel |= sig; 
+    if(sig < SIGMAX){
+        gSignel[sig]++; 
+        //proc_wakeup(NET_BLOCK_EVT);
+    }
+}
+
+static void print_trace(void){
+    int start = dcnt - 16;
+    klog("%d %d:", dcnt,   gSignel[SIGNET]);
+    for(int i = 0; i < 16; i++){
+        klog("%d ", dflag[start%(sizeof(dflag)/sizeof(int))]);
+        start++;
+    }
+    klog("\n");
 }
 
 void* intr_thread(void* p) {
 	struct irq_entry *entry;
     while(1){
-       if(SIGUSR1 & gSignel){
+       while(gSignel[SIGNET]){
+TRACE(); 
            net_protocol_handler();
-           gSignel &= ~SIGUSR1; 
+TRACE(); 
+           gSignel[SIGNET]--; 
        }
-       if(SIGUSR2 & gSignel){
+      while(gSignel[SIGINT]){
+TRACE(); 
            net_event_handler();
-          gSignel &= ~SIGUSR2; 
+TRACE(); 
+           gSignel[SIGINT]--;
        }
-       if(SIGALRM & gSignel){
+       while(gSignel[SIGALRM]){
+TRACE(); 
            net_timer_handler();
-         gSignel &= ~SIGALRM; 
+TRACE(); 
+           gSignel[SIGALRM]--; 
        }
-       if(gSignel){
-           for (entry = irq_vec; entry; entry = entry->next) {
-               if (entry->irq & gSignel) {
-                   debugf("irq=%d, name=%s", entry->irq, entry->name);
-                   entry->handler(entry->irq, entry->dev);
-                   gSignel &= ~entry->irq;
-               }
-           }
-       }
-       proc_usleep(1000);
+TRACE(); 
+            for (entry = irq_vec; entry; entry = entry->next) {
+                if (entry->irq == SIGIRQ) {
+TRACE(); 
+                int cnt = tap_select(entry->dev);
+                for(int i = 0; i < cnt; i++){
+                    entry->handler(entry->irq, entry->dev);
+TRACE(); 
+                }
+            }
+        }
+TRACE(); 
+       net_timer_handler();
+TRACE(); 
+        start_task();
+TRACE();  
+       usleep(1000);
+TRACE(); 
     }
     return 0;
+}
+
+void* debug_thread(void* p){
+    while(1){
+        print_trace();
+        int ret = sleep(1);
+    }
 }
 
 int
@@ -98,10 +132,13 @@ intr_run(void)
 {
     pthread_t tid;
     pthread_create(&tid, NULL, intr_thread, NULL);
+    klog("intr thread id: %d\n", tid);
+    //pthread_create(&tid, NULL, debug_thread, NULL);
 }
 
 int
 intr_init(void)
 {
+    pthread_mutex_init(&gMutex, NULL);
     return 0;
 }

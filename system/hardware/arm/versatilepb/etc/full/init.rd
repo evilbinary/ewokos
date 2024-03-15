@@ -10,27 +10,23 @@
 /bin/ipcserv /drivers/versatilepb/ps2moused  /dev/mouse0
 
 /bin/ipcserv /drivers/versatilepb/powerd     /dev/power0
-#/bin/ipcserv /drivers/versatilepb/smc91c111d /dev/eth0
-#/bin/ipcserv /drivers/netd             /dev/net0 /dev/eth0
+/bin/ipcserv /drivers/versatilepb/smc91c111d /dev/eth0
+/bin/ipcserv /drivers/netd             /dev/net0 /dev/eth0
+/bin/telnetd &
 
 /bin/ipcserv /drivers/nulld           /dev/null
 /bin/ipcserv /drivers/ramfsd          /tmp
 /bin/ipcserv /drivers/proc/sysinfod   /proc/sysinfo
 /bin/ipcserv /drivers/proc/stated     /proc/state
 
-@/sbin/sessiond &
-@/bin/session &
+@/bin/ipcserv /sbin/sessiond
+
+@/bin/session -r &
 
 @/bin/ipcserv /drivers/xserverd        /dev/x
 @/sbin/x/xmoused /dev/mouse0 &
 @/sbin/x/xim_none /dev/keyb0 &
 @/bin/x/xsession &
 
-
 @/bin/ipcserv /drivers/consoled        0
 @/bin/console /dev/console0&
-
-@/bin/ipcserv /drivers/consoled        1
-@/bin/console /dev/console1&
-
-

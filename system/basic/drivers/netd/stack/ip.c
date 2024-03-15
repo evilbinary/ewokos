@@ -129,18 +129,18 @@ ip_dump(const uint8_t *data, size_t len)
     v = (hdr->vhl & 0xf0) >> 4;
     hl = hdr->vhl & 0x0f;
     hlen = hl << 2;
-    printf("        vhl: 0x%02x [v: %u, hl: %u (%u)]\n", hdr->vhl, v, hl, hlen);
-    printf("        tos: 0x%02x\n", hdr->tos);
+    klog("        vhl: 0x%02x [v: %u, hl: %u (%u)]\n", hdr->vhl, v, hl, hlen);
+    klog("        tos: 0x%02x\n", hdr->tos);
     total = ntoh16(hdr->total);
-    printf("      total: %u (payload: %u)\n", total, total - hlen);
-    printf("         id: %u\n", ntoh16(hdr->id));
+    klog("      total: %u (payload: %u)\n", total, total - hlen);
+    klog("         id: %u\n", ntoh16(hdr->id));
     offset = ntoh16(hdr->offset);
-    printf("     offset: 0x%04x [flags=%x, offset=%u]\n", offset, (offset & 0xe000) >> 13, offset & 0x1fff);
-    printf("        ttl: %u\n", hdr->ttl);
-    printf("   protocol: %u (%s)\n", hdr->protocol, ip_protocol_name(hdr->protocol));
-    printf("        sum: 0x%04x (0x%04x)\n", ntoh16(hdr->sum), ntoh16(cksum16((uint16_t *)data, hlen, -hdr->sum)));
-    printf("        src: %s\n", ip_addr_ntop(hdr->src, addr, sizeof(addr)));
-    printf("        dst: %s\n", ip_addr_ntop(hdr->dst, addr, sizeof(addr)));
+    klog("     offset: 0x%04x [flags=%x, offset=%u]\n", offset, (offset & 0xe000) >> 13, offset & 0x1fff);
+    klog("        ttl: %u\n", hdr->ttl);
+    klog("   protocol: %u (%s)\n", hdr->protocol, ip_protocol_name(hdr->protocol));
+    klog("        sum: 0x%04x (0x%04x)\n", ntoh16(hdr->sum), ntoh16(cksum16((uint16_t *)data, hlen, -hdr->sum)));
+    klog("        src: %s\n", ip_addr_ntop(hdr->src, addr, sizeof(addr)));
+    klog("        dst: %s\n", ip_addr_ntop(hdr->dst, addr, sizeof(addr)));
 #ifdef HEXDUMP
     hexdump(stderr, data, len);
 #endif
@@ -244,6 +244,19 @@ ip_iface_alloc(const char *unicast, const char *netmask)
     }
     iface->broadcast = (iface->unicast & iface->netmask) | ~iface->netmask;
     return iface;
+}
+
+void ip_iface_update(struct ip_iface *iface, uint32_t ipaddr, uint32_t netmask, uint32_t gateway){
+    if(iface == NULL)
+        return;
+    iface->unicast = ipaddr;
+    iface->netmask = netmask;
+    iface->broadcast = (iface->unicast & iface->netmask) | ~iface->netmask;
+
+    if (!ip_route_add(iface->unicast & iface->netmask, iface->netmask, IP_ADDR_ANY, iface)) {
+        errorf("ip_route_add() failure");
+        return -1;
+    } 
 }
 
 /* NOTE: must not be call after net_run() */
@@ -357,10 +370,12 @@ ip_output_device(struct ip_iface *iface, const uint8_t *data, size_t len, ip_add
         } else {
             ret = arp_resolve(NET_IFACE(iface), dst, hwaddr);
             if (ret != ARP_RESOLVE_FOUND) {
+                klog("arp resolve error\n");
                 return -1;
             }
         }
     }
+    TRACE();
     return net_device_output(NET_IFACE(iface)->dev, NET_PROTOCOL_TYPE_IP, data, len, hwaddr);
 }
 
@@ -370,8 +385,7 @@ ip_output_core(struct ip_iface *iface, uint8_t protocol, const uint8_t *data, si
     struct ip_hdr *hdr;
     uint16_t hlen, total;
     char addr[IP_ADDR_STR_LEN];
-
-    uint8_t *buf = malloc(IP_TOTAL_SIZE_MAX*2);
+    uint8_t *buf = memory_alloc(IP_TOTAL_SIZE_MAX*2);
     if(!buf)
         return -1;
 
@@ -395,21 +409,16 @@ ip_output_core(struct ip_iface *iface, uint8_t protocol, const uint8_t *data, si
     ip_dump(buf, total);
 
     int ret = ip_output_device(iface, buf, total, nexthop);
-    free(buf);
+    memory_free(buf);
+    TRACE();
     return ret;
 }
 
 static uint16_t
 ip_generate_id(void)
 {
-    static mutex_t mutex = MUTEX_INITIALIZER;
     static uint16_t id = 128;
-    uint16_t ret;
-
-    mutex_lock(&mutex);
-    ret = id++;
-    mutex_unlock(&mutex);
-    return ret;
+    return id++;
 }
 
 ssize_t
@@ -445,9 +454,11 @@ ip_output(uint8_t protocol, const uint8_t *data, size_t len, ip_addr_t src, ip_a
     }
     id = ip_generate_id();
     if (ip_output_core(iface, protocol, data, len, iface->unicast, dst, nexthop, id, 0) == -1) {
+        TRACE(); 
         errorf("ip_output_core() failure");
         return -1;
     }
+    TRACE();
     return len;
 }
 

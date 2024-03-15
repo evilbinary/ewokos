@@ -20,6 +20,7 @@ typedef struct {
 } proc_block_event_t;
 
 #define THREAD_STACK_PAGES 16
+#define STACK_PAGES 32
 
 typedef struct {
 	uint32_t base;
@@ -27,42 +28,42 @@ typedef struct {
 } thread_stack_t;
 
 typedef struct {
-	page_dir_entry_t* vm;
-	uint32_t          malloc_base;
-	uint32_t          rw_heap_base;
-	uint32_t          heap_size;
-	int32_t           refs;
-	bool              ready_ping;
+	uint32_t           pde_index;
+	page_dir_entry_t*  vm;
+
+	uint32_t           malloc_base;
+	uint32_t           rw_heap_base;
+	uint32_t           heap_size;
+	int32_t            refs;
+	bool               ready_ping;
 	
-	int32_t          shms[SHM_MAX];
+	int32_t            shms[SHM_MAX];
 	proc_block_event_t block_events[BLOCK_EVT_MAX];
 
-	ipc_server_t      ipc_server;
-	signal_t          signal;
-	proc_interrupt_t  interrupt;
+	ipc_server_t       ipc_server;
+	signal_t           signal;
+	proc_interrupt_t   interrupt;
 
-	thread_stack_t  thread_stacks[MAX_THREAD_NUM_PER_PROC];
+	thread_stack_t     *thread_stacks;
+	uint32_t           user_stack[STACK_PAGES];
 } proc_space_t;
-
-#define STACK_PAGES 32
 
 typedef struct st_proc {
 	procinfo_t        info;
+
 	uint32_t          block_event;
 	uint32_t          ipc_buffered;
 	bool              ipc_buffer_clean;
+	ipc_res_t         ipc_res;
+
 	int64_t           sleep_counter; //sleep usec
 	uint32_t          schd_core_lock_counter; //schd_core_lock usec
 	uint32_t          run_usec_counter; //run time usec
-	proc_space_t*     space;
 
-	union {
-		uint32_t        user_stack[STACK_PAGES];
-		uint32_t        thread_stack_base;
-	} stack;
+	proc_space_t*     space; //threads share the space from owner proc
+	uint32_t          thread_stack_base;
 
 	context_t         ctx;
-	ipc_res_t         ipc_res;
 } proc_t;
 
 extern proc_t* get_current_proc(void);
@@ -71,6 +72,8 @@ extern int32_t _core_proc_pid;
 extern uint32_t _ipc_uid;
 
 extern void    procs_init(void);
+extern uint32_t procs_get_max_num(void);
+extern uint32_t procs_get_max_table_num(void);
 extern int32_t proc_load_elf(proc_t *proc, const char *proc_image, uint32_t size);
 extern int32_t proc_start(proc_t* proc, uint32_t entry);
 extern proc_t* proc_get_next_ready(void);
@@ -91,7 +94,7 @@ extern void*   proc_malloc(proc_t* proc, int32_t size);
 extern uint32_t  proc_msize(proc_t* proc);
 extern void    proc_free(proc_t* proc);
 
-extern void proc_block_on(context_t* text, int32_t pid_by, uint32_t event);
+extern void    proc_block_on(context_t* text, int32_t pid_by, uint32_t event);
 extern void    proc_wakeup(int32_t pid_by, int32_t pid, uint32_t event);
 extern void    proc_waitpid(context_t* ctx, int32_t pid);
 extern proc_t* proc_get(int32_t pid);

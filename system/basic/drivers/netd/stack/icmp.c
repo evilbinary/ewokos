@@ -5,6 +5,7 @@
 #include "util.h"
 #include "ip.h"
 #include "icmp.h"
+#include "../platform.h"
 
 #define ICMP_BUFSIZ IP_PAYLOAD_SIZE_MAX
 
@@ -60,18 +61,18 @@ icmp_dump(const uint8_t *data, size_t len)
     struct icmp_echo *echo;
 
     hdr = (struct icmp_hdr *)data;
-    printf( "       type: %u (%s)\n", hdr->type, icmp_type_ntoa(hdr->type));
-    printf( "       code: %u\n", hdr->code);
-    printf( "        sum: 0x%04x (0x%04x)\n", ntoh16(hdr->sum), ntoh16(cksum16((uint16_t *)data, len, -hdr->sum)));
+    klog( "       type: %u (%s)\n", hdr->type, icmp_type_ntoa(hdr->type));
+    klog( "       code: %u\n", hdr->code);
+    klog( "        sum: 0x%04x (0x%04x)\n", ntoh16(hdr->sum), ntoh16(cksum16((uint16_t *)data, len, -hdr->sum)));
     switch (hdr->type) {
     case ICMP_TYPE_ECHOREPLY:
     case ICMP_TYPE_ECHO:
         echo = (struct icmp_echo *)hdr;
-        printf( "         id: %u\n", ntoh16(echo->id));
-        printf( "        seq: %u\n", ntoh16(echo->seq));
+        klog( "         id: %u\n", ntoh16(echo->id));
+        klog( "        seq: %u\n", ntoh16(echo->seq));
         break;
     default:
-        printf( "     values: 0x%08x\n", ntoh32(hdr->values));
+        klog( "     values: 0x%08x\n", ntoh32(hdr->values));
         break;
     }
 #ifdef HEXDUMP
@@ -145,6 +146,7 @@ icmp_output(uint8_t type, uint8_t code, uint32_t values, const uint8_t *data, si
     icmp_dump((uint8_t *)hdr, msg_len);
 
     int ret = ip_output(IP_PROTOCOL_ICMP, (uint8_t *)hdr, msg_len, src, dst);
+    TRACE();
     free(buf);
     return ret;
 }

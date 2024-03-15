@@ -169,16 +169,22 @@ static void timer_handler(void) {
 }
 
 static void win_loop(void* p) {
+	ipc_disable();
 	if(_xwin->isDirty())
 		_xwin->repaint();
+	ipc_enable();
 	proc_usleep(30000);
 }
 
 static void* thread_loop(void* p) {
-	X* x = (X*)p;
-
+	//X* x = (X*)p;
+	X x;
+	grect_t desk;
+	x.getDesktopSpace(desk, 0);
+	x.open(0, _xwin, desk.w*2/3, desk.h*2/3, "xterm", 0);
+	_xwin->setVisible(true);
 	uint32_t timer_id = timer_set(500000, timer_handler);
-	x->run(win_loop, _xwin);
+	x.run(win_loop, _xwin);
 	timer_remove(timer_id);
 	_dev->terminated = true;
 	return NULL;
@@ -196,12 +202,11 @@ static int console_write(int fd,
 	(void)node;
 	(void)offset;
 
-	XConsole *xwin = (XConsole*)p;
-	if(size <= 0 || xwin == NULL)
+	if(size <= 0 || _xwin == NULL)
 		return 0;
 
-	xwin->put((const char*)buf, size);
-	xwin->refresh();
+	_xwin->put((const char*)buf, size);
+	_xwin->refresh();
 	return size;
 }
 
@@ -242,13 +247,6 @@ int run(const char* mnt_point) {
 
 	XConsole xwin;
 	xwin.readConfig(x_get_theme_fname(X_THEME_ROOT, "xterm", "theme.conf"));
-
-	X x;
-	grect_t desk;
-	x.getDesktopSpace(desk, 0);
-	x.open(0, &xwin, desk.w*2/3, desk.h*2/3, "xterm", 0);
-	xwin.setVisible(true);
-
 	_xwin = &xwin;
 
 	vdevice_t dev;
@@ -256,17 +254,15 @@ int run(const char* mnt_point) {
 	strcpy(dev.name, "xconsole");
 	dev.write = console_write;
 	dev.read = console_read;
-	dev.extra_data = &xwin;
 	dev.loop_step = dev_loop;
 	_dev = &dev;
 
 	pthread_t tid;
-	pthread_create(&tid, NULL, thread_loop, &x);
+	pthread_create(&tid, NULL, thread_loop, NULL);
 
 	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0600);
 	charbuf_free(_buffer);
 	proc_wakeup(RW_BLOCK_EVT);
-	xwin.close();
 	exit(0);
 }
 

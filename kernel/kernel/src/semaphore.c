@@ -3,7 +3,7 @@
 #include <kstring.h>
 #include <stddef.h>
 
-#define SEMAPHORE_MAX 128
+#define SEMAPHORE_MAX 1024
 
 static semaphore_t _semaphores[SEMAPHORE_MAX];
 
@@ -16,7 +16,7 @@ void semaphore_init(void) {
 }
 
 int32_t semaphore_alloc(void) {
-	proc_t* proc = get_current_proc();
+	proc_t* proc = proc_get_proc(get_current_proc());
 	if(proc == NULL)
 		return 0;
 
@@ -47,7 +47,7 @@ void semaphore_free(uint32_t sem_id) {
 		return;
 	sem_id--;
 
-	proc_t* cproc = get_current_proc();
+	proc_t* cproc = proc_get_proc(get_current_proc());
 	if(sem_id >= SEMAPHORE_MAX ||
 			_semaphores[sem_id].creater_pid == -1 ||
 			cproc == NULL)
@@ -60,27 +60,29 @@ void semaphore_free(uint32_t sem_id) {
 	}	
 }
 
-int32_t semaphore_enter(context_t* ctx, uint32_t sem_id) {
+void semaphore_enter(context_t* ctx, uint32_t sem_id) {
 	ctx->gpr[0] = -1;
+
 	if(sem_id == 0)
-		return -1;
+		return;
 	sem_id--;
 
 	proc_t* cproc = get_current_proc();
 	if(sem_id >= SEMAPHORE_MAX ||
 			_semaphores[sem_id].creater_pid == -1 ||
 			cproc == NULL)
-		return -1;
+		return;
 
 	if(_semaphores[sem_id].occupied == SEM_OCCUPIED) {
+		ctx->gpr[0] = -2;
 		proc_block_on(ctx, _semaphores[sem_id].occupied_pid, (uint32_t)_semaphores + sem_id);
-		return -1;
+		return;
 	}
 
 	ctx->gpr[0] = 0;
 	_semaphores[sem_id].occupied = SEM_OCCUPIED;
 	_semaphores[sem_id].occupied_pid = cproc->info.pid;
-	return 0;
+	return;
 }
 
 int32_t semaphore_quit(uint32_t sem_id) {
@@ -89,6 +91,7 @@ int32_t semaphore_quit(uint32_t sem_id) {
 	sem_id--;
 
 	proc_t* cproc = get_current_proc();
+
 	if(sem_id >= SEMAPHORE_MAX ||
 			_semaphores[sem_id].creater_pid == -1 ||
 			_semaphores[sem_id].occupied_pid == -1 ||
@@ -96,8 +99,9 @@ int32_t semaphore_quit(uint32_t sem_id) {
 			cproc->info.pid != _semaphores[sem_id].occupied_pid)
 		return -1;
 
+	int pid_by = _semaphores[sem_id].occupied_pid;
 	_semaphores[sem_id].occupied = SEM_IDLE;
-	proc_wakeup(_semaphores[sem_id].occupied_pid, -1, (uint32_t)_semaphores + sem_id);
 	_semaphores[sem_id].occupied_pid = -1;
+	proc_wakeup(pid_by, -1, (uint32_t)_semaphores + sem_id);
 	return 0;
 }

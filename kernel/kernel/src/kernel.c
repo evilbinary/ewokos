@@ -127,7 +127,7 @@ static void welcome(void) {
 		  "mmio_base          Phy:0x%x, V: 0x%x\n"
 		  "schedule_freq      %d\n"
 		  "max procs num      %d\n"
-		  "max thread num     %d\n"
+		  "max task(threads)  %d\n"
 		  "---------------------------------------------------\n\n",
 			_sys_info.machine,
 			_sys_info.arch,
@@ -137,8 +137,8 @@ static void welcome(void) {
 			_sys_info.phy_offset,
 			_sys_info.mmio.phy_base, _sys_info.mmio.v_base,
 			_kernel_config.schedule_freq,
-			MAX_PROC_NUM,
-			MAX_THREAD_NUM_PER_PROC);
+			procs_get_max_num(),
+			procs_get_max_table_num());
 }
 
 int32_t load_init_proc(void);

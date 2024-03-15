@@ -60,10 +60,10 @@ udp_dump(const uint8_t *data, size_t len)
     struct udp_hdr *hdr;
 
     hdr = (struct udp_hdr *)data;
-    printf( "        src: %u\n", ntoh16(hdr->src));
-    printf( "        dst: %u\n", ntoh16(hdr->dst));
-    printf( "        len: %u\n", ntoh16(hdr->len));
-    printf( "        sum: 0x%04x\n", ntoh16(hdr->sum));
+    klog( "        src: %u\n", ntoh16(hdr->src));
+    klog( "        dst: %u\n", ntoh16(hdr->dst));
+    klog( "        len: %u\n", ntoh16(hdr->len));
+    klog( "        sum: 0x%04x\n", ntoh16(hdr->sum));
 #ifdef HEXDUMP
     hexdump(stderr, data, len);
 #endif
@@ -241,6 +241,7 @@ udp_output(struct ip_endpoint *src, struct ip_endpoint *dst, const  uint8_t *dat
         ip_endpoint_ntop(src, ep1, sizeof(ep1)), ip_endpoint_ntop(dst, ep2, sizeof(ep2)), total, len);
     udp_dump((uint8_t *)hdr, total);
     int ret = ip_output(IP_PROTOCOL_UDP, (uint8_t *)hdr, total, src->addr, dst->addr);
+    TRACE();
     free(buf);
     if(ret < 0){
         errorf("ip_output() failure");
