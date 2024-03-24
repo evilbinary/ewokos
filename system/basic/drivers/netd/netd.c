@@ -19,20 +19,8 @@
 
 #include "stack/util.h"
 #include "stack/net.h"
-
-static int get_mac_address(char* dev, uint8_t* buf){
-	int ret = -1;
-    proto_t  out;
-    PF->init(&out);
-    ret = dev_cntl(dev, 0, NULL, &out);
-	if(ret == 0){
-        proto_read_to(&out, buf, 6);
-	}
-    PF->clear(&out);
-    return ret;
-}
-
-
+#include "stack/ip.h"
+#include "stack/loopback.h"
 
 static int network_fcntl(int fd, int from_pid, fsinfo_t* info,
 	int cmd, proto_t* in, proto_t* out, void* p) {
@@ -72,8 +60,6 @@ static int network_write(int fd, int from_pid, fsinfo_t* info,
 static int network_close(int fd, int from_pid, uint32_t node, bool delnode,void* p) {
 	(void)fd;
 	fsinfo_t* info = dev_get_file(fd, from_pid, node);
-	// fsinfo_t info;
-	// vfs_get_by_node(node, &info);
 
 	if(delnode){
 		net_task_t *task = (net_task_t *)info->data;
@@ -92,16 +78,8 @@ static int network_close(int fd, int from_pid, uint32_t node, bool delnode,void*
 
 #define DEFAULT_GATEWAY "169.254.72.1"
 
-char ETHER_TAP_HW_ADDR[32];
 static char ETHER_TAP_NAME[16];
-
-static void* network_loop(void* p) {
-	// if(eth_select(ETHER_TAP_NAME)){
-	// 	raise_softirq(SIGIRQ);
-	// }
-	raise_softirq(SIGALRM);
-	proc_usleep(1000);
-}
+void *net_thread(void* p);
 
 static int setup(void)
 {
@@ -129,7 +107,7 @@ static int setup(void)
         return -1;
     }
 
-    dev = ether_tap_init(ETHER_TAP_NAME, ETHER_TAP_HW_ADDR);
+    dev = ether_tap_init(ETHER_TAP_NAME, NULL);
     if (!dev) {
         klog("ether_tap_init() failure");
         return -1;
@@ -146,20 +124,14 @@ static int setup(void)
         return -1;
     }
 
-    // if (ip_route_set_default_gateway(iface, DEFAULT_GATEWAY) == -1) {
-    //     klog("ip_route_set_default_gateway() failure");
-    //     return -1;
-    // }
-
 	if(dhcp_run(dev) == -1){
         klog("dhcp_run() failure");
         return -1;
 	}
 
-    if (net_run() == -1) {
-        klog("net_run() failure");
-        return -1;
-    }
+	pthread_t tid;
+    pthread_create(&tid, NULL, net_thread, NULL);
+
     return 0;
 }
 
@@ -191,6 +163,32 @@ void mac2str(uint8_t *mac,  char* str){
 	*(str - 1) = '\0';
 }
 
+char* network_devcmd(int from_pid, int argc, char** argv, void* p) {
+	char* buf = malloc(256);
+	buf[0] = 0;
+	if(strcmp(argv[0], "ip") == 0) {
+		struct ip_iface *iface =  NULL;
+		char* p = buf;
+		while(true){
+			iface = ip_iface_itor(iface);
+			if(iface == NULL)
+				break;
+			char unicast[16];
+			char netmask[16];	
+			char broadcast[16];
+			ip_addr_ntop(iface->unicast, unicast, sizeof(unicast));
+			ip_addr_ntop(iface->netmask, netmask, sizeof(netmask));
+			ip_addr_ntop(iface->broadcast, broadcast, sizeof(broadcast));
+
+			snprintf(p + strlen(p), 256 - strlen(p), "IP Address: %s\n netmask: %s\n broadcast: %s\n", 
+					unicast,
+					netmask,
+					broadcast);
+		}
+	}
+	return buf;
+}
+
 int main(int argc, char** argv) {
 	const char* mnt_point = argc > 1 ? argv[1]: "/dev/net0";
 	const char* net_dev = argc > 2 ? argv[2]: "/dev/eth0";
@@ -200,20 +198,15 @@ int main(int argc, char** argv) {
 	memset(&dev, 0, sizeof(vdevice_t));
 	strcpy(dev.name, "networkd");
 
-	get_mac_address(net_dev,  mac);
-	mac2str(mac, ETHER_TAP_HW_ADDR);
 	strcpy(ETHER_TAP_NAME, net_dev);
 	setup();
 	
-	//dev.dev_cntl = network_dcntl; 
 	dev.fcntl = network_fcntl;
 	dev.open = network_open;
 	dev.read = network_read;
 	dev.write = network_write;
 	dev.close = network_close;
-	//dev.loop_step = network_loop;
-	//uint32_t tid = timer_set(1000, net_timer_handler);
+	dev.cmd = network_devcmd;
 	device_run(&dev, mnt_point, FS_TYPE_ANNOUNIMOUS | FS_TYPE_CHAR, 0666);
-	//timer_remove(tid);
 	return 0;
 }

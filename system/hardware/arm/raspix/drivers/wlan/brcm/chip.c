@@ -1,4 +1,7 @@
 #include <types.h>
+#include <stdlib.h>
+#include <string.h>
+ #include <stdio.h>
 #include <utils/skb.h>
 #include <utils/log.h>
 
@@ -224,7 +227,7 @@ static struct brcmf_core *brcmf_chip_add_core(u16 coreid,
 
     core = malloc(sizeof(*core));
     if (!core)
-        return (-ENOMEM);
+        return NULL;
 
     core->pub.id = coreid;
     core->pub.base = base;
@@ -277,10 +280,10 @@ struct brcmf_core *brcmf_chip_get_chipcommon(void)
 
 static void brcmf_sdio_buscore_write32(uint32_t addr, uint32_t val)
 {
-    uint32_t err;
+    int err;
     brcmf_sdiod_writel(addr, val, &err);
     if(err){
-        brcm_klog("%s error:%d\n", __func__, err);
+        brcm_log("%s error:%d\n", __func__, err);
     }
 }
 
@@ -301,28 +304,13 @@ static void brcmf_sdio_buscore_activate(uint32_t rstvec)
 
 static uint32_t brcmf_sdio_buscore_read32(uint32_t addr)
 {
-    uint32_t val, err;
+    uint32_t val;
+    int err;
 
     val = brcmf_sdiod_readl(addr, &err);
     if(err){
-        brcm_klog("%s error:%d\n", __func__, err);
+        brcm_log("%s error:%d\n", __func__, err);
     }
-    // /*
-    //  * this is a bit of special handling if reading the chipcommon chipid
-    //  * register. The 4339 is a next-gen of the 4335. It uses the same
-    //  * SDIO device id as 4335 and the chipid register returns 4335 as well.
-    //  * It can be identified as 4339 by looking at the chip revision. It
-    //  * is corrected here so the chip.c module has the right info.
-    //  */
-    // if (addr == CORE_CC_REG(SI_ENUM_BASE_DEFAULT, chipid) &&
-    //     (sdiodev->func1->device == SDIO_DEVICE_ID_BROADCOM_4339 ||
-    //      sdiodev->func1->device == SDIO_DEVICE_ID_BROADCOM_4335_4339)) {
-    //     rev = (val & CID_REV_MASK) >> CID_REV_SHIFT;
-    //     if (rev >= 2) {
-    //         val &= ~CID_ID_MASK;
-    //         val |= BRCM_CC_4339_CHIP_ID;
-    //     }
-    // }
 
     return val;
 }
@@ -501,7 +489,7 @@ static int brcmf_chip_cores_check()
         if(!core)
             continue;
             
-        brcm_klog(" [%-2d] core 0x%x:%-3d base 0x%08x wrap 0x%08x\n",
+        brcm_log(" [%-2d] core 0x%x:%-3d base 0x%08x wrap 0x%08x\n",
               idx++, core->pub.id, core->pub.rev, core->pub.base,
               core->wrapbase);
 
@@ -525,12 +513,12 @@ static int brcmf_chip_cores_check()
     }
 
     if (!cpu_found) {
-        brcm_klog("CPU core not detected\n");
+        brcm_log("CPU core not detected\n");
         return -ENXIO;
     }
     /* check RAM core presence for ARM CM3 core */
     if (need_socram && !has_socram) {
-        brcm_klog("RAM core not provided with ARM CM3 core\n");
+        brcm_log("RAM core not provided with ARM CM3 core\n");
         return -ENODEV;
     }
     return 0;
@@ -538,7 +526,6 @@ static int brcmf_chip_cores_check()
 
 static bool brcmf_chip_ai_iscoreup(struct brcmf_core_priv *core)
 {
-    struct brcmf_chip_priv *ci;
     uint32_t regdata;
     bool ret;
 
@@ -554,7 +541,6 @@ static bool brcmf_chip_ai_iscoreup(struct brcmf_core_priv *core)
 static void brcmf_chip_ai_coredisable(struct brcmf_core_priv *core,
                       uint32_t prereset, uint32_t reset)
 {
-    struct brcmf_chip_priv *ci;
     uint32_t regdata;
 
 
@@ -592,7 +578,6 @@ in_reset_configure:
 static void brcmf_chip_ai_resetcore(struct brcmf_core_priv *core, uint32_t prereset,
                     uint32_t reset, uint32_t postreset)
 {
-    struct brcmf_chip_priv *ci;
     int count;
 
     /* must disable first to work for arbitrary current core state */
@@ -665,7 +650,7 @@ static void brcmf_chip_disable_arm(u16 id)
                      ARMCR4_BCMA_IOCTL_CPUHALT);
         break;
     default:
-        brcm_klog("unknown id: %u\n", id);
+        brcm_log("unknown id: %u\n", id);
         break;
     }
 }
@@ -674,7 +659,6 @@ static inline void
 brcmf_chip_cr4_set_passive(void)
 {
     struct brcmf_core *core;
-    struct brcmf_core_priv *sr;
 
     brcmf_chip_disable_arm(BCMA_CORE_ARM_CR4);
 
@@ -755,7 +739,7 @@ static bool brcmf_chip_cm3_set_active(void)
 
     core = brcmf_chip_get_core(BCMA_CORE_INTERNAL_MEM);
     if (!brcmf_chip_iscoreup(core)) {
-        brcm_klog("SOCRAM core is down after reset?\n");
+        brcm_log("SOCRAM core is down after reset?\n");
         return false;
     }
 
@@ -837,7 +821,7 @@ static uint32_t brcmf_chip_tcm_rambase(void)
     case CY_CC_89459_CHIP_ID:
         return ((pub.chiprev < 9) ? 0x180000 : 0x160000);
     default:
-        brcm_klog("unknown chip: %s\n", pub.name);
+        brcm_log("unknown chip: %s\n", pub.name);
         break;
     }
     return INVALID_RAMBASE;
@@ -861,9 +845,8 @@ static void brcmf_chip_socram_ramsize(struct brcmf_core_priv *sr, uint32_t *rams
                       uint32_t *srsize)
 {
     uint32_t coreinfo;
-    uint nb, banksize, lss;
+    uint32_t i, nb, banksize, lss;
     bool retent;
-    int i;
 
     *ramsize = 0;
     *srsize = 0;
@@ -969,7 +952,7 @@ static uint32_t brcmf_chip_tcm_ramsize(struct brcmf_core_priv *cr4)
 static int brcmf_chip_get_raminfo(void){
     struct brcmf_core_priv *mem_core;
     struct brcmf_core *mem;
-    brcm_klog("brcmf_chip_get_raminfo\n");
+    brcm_log("brcmf_chip_get_raminfo\n");
 
     mem = brcmf_chip_get_core(BCMA_CORE_ARM_CR4);
     if (mem) {
@@ -977,7 +960,7 @@ static int brcmf_chip_get_raminfo(void){
         pub.ramsize = brcmf_chip_tcm_ramsize(mem_core);
         pub.rambase = brcmf_chip_tcm_rambase();
         if (pub.rambase == INVALID_RAMBASE) {
-            brcm_klog("RAM base not provided with ARM CR4 core\n");
+            brcm_log("RAM base not provided with ARM CR4 core\n");
             return -EINVAL;
         }
     } else {
@@ -988,31 +971,31 @@ static int brcmf_chip_get_raminfo(void){
             pub.ramsize = brcmf_chip_sysmem_ramsize(mem_core);
             pub.rambase = brcmf_chip_tcm_rambase();
             if (pub.rambase == INVALID_RAMBASE) {
-                brcm_klog("RAM base not provided with ARM CA7 core\n");
+                brcm_log("RAM base not provided with ARM CA7 core\n");
                 return -EINVAL;
             }
         } else {
             mem = brcmf_chip_get_core(BCMA_CORE_INTERNAL_MEM);
             if (!mem) {
-                brcm_klog("No memory cores found\n");
+                brcm_log("No memory cores found\n");
                 return -ENOMEM;
             }
             mem_core = container_of(mem, struct brcmf_core_priv,
                         pub);
-            brcmf_chip_socram_ramsize(mem_core, pub.ramsize,
-                            pub.srsize);
+            brcmf_chip_socram_ramsize(mem_core, &pub.ramsize,
+                            &pub.srsize);
         }
     }
     
-    brcm_klog("RAM: base=0x%x size=%d (0x%x) sr=%d (0x%x)\n",
+    brcm_log("RAM: base=0x%x size=%d (0x%x) sr=%d (0x%x)\n",
           pub.rambase, pub.ramsize, pub.ramsize,
           pub.srsize,  pub.srsize);
 
     if (!pub.ramsize) {
-        brcm_klog("RAM size is undetermined\n");
+        brcm_log("RAM size is undetermined\n");
         return -ENOMEM;
         if (pub.ramsize > BRCMF_CHIP_MAX_MEMSIZE) {
-            brcm_klog("RAM size is incorrect\n");
+            brcm_log("RAM size is incorrect\n");
             return -ENOMEM;
         }
     }
@@ -1022,7 +1005,6 @@ static int brcmf_chip_get_raminfo(void){
 
 int brcmf_chip_recognition(void)
 {
-    struct brcmf_core *core;
     uint32_t regdata;
     uint32_t socitype;
     int ret;
@@ -1040,7 +1022,7 @@ int brcmf_chip_recognition(void)
 
     brcmf_chip_name(pub.chip, pub.chiprev,
             pub.name, sizeof(pub.name));
-    brcm_klog("found %s chip: %s\n",
+    brcm_log("found %s chip: %s\n",
           socitype == SOCI_SB ? "SB" : "AXI", pub.name);
 
 
@@ -1118,7 +1100,7 @@ int brcmf_chip_setup(void)
         pub.pmucaps = val;
     }
 
-    brcm_klog("ccrev=%d, pmurev=%d, pmucaps=0x%x\n",
+    brcm_log("ccrev=%d, pmurev=%d, pmucaps=0x%x\n",
           cc->pub.rev, pub.pmurev, pub.pmucaps);
 
     return ret;
@@ -1126,7 +1108,6 @@ int brcmf_chip_setup(void)
 
 struct brcmf_chip *brcmf_chip_attach(void)
 {
-    struct brcmf_chip_priv *chip;
     int err = 0;
 
     err = brcmf_chip_recognition();

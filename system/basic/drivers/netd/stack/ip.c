@@ -297,6 +297,20 @@ ip_iface_select(ip_addr_t addr)
     return entry;
 }
 
+struct ip_iface *
+ip_iface_itor(struct ip_iface *priv)
+{
+    struct ip_iface *entry;
+
+    if(priv == NULL)
+        return ifaces;
+    for (entry = ifaces; entry; entry = entry->next) {
+        if(entry == priv)
+            return entry->next;
+    }
+    return entry;
+}
+
 static void
 ip_input(const uint8_t *data, size_t len, struct net_device *dev)
 {
@@ -370,7 +384,7 @@ ip_output_device(struct ip_iface *iface, const uint8_t *data, size_t len, ip_add
         } else {
             ret = arp_resolve(NET_IFACE(iface), dst, hwaddr);
             if (ret != ARP_RESOLVE_FOUND) {
-                klog("arp resolve error\n");
+                infof("arp resolve error\n");
                 return -1;
             }
         }

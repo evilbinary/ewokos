@@ -21,6 +21,7 @@ class Book: public XWin {
 	int  current_page;
 	int  next_page;
 	int  read_len;
+	int  mouse_last_y;
 	FILE  *fp;
 
 	void pageUp() {
@@ -86,9 +87,16 @@ protected:
 			graph_draw_char_font(g, x, y, unicode, theme.getFont(), theme.basic.fgColor, &w, NULL);
 			x += w;
 		}
+		
+		i = i/8;
+		while(i < read_len) {
+			char c = *((uint8_t*)text + i);
+			i++;
+			if(c == '\n')
+				break;
+		}
 		next_page = current_page + i;
 	}
-
 
 	void onEvent(xevent_t* ev) {
 		xinfo_t xinfo;
@@ -104,17 +112,33 @@ protected:
 					return;
 			}
 		}
-		else if(ev->type == XEVT_MOUSE && ev->state == XEVT_MOUSE_CLICK) {
-			gpos_t pos = getInsidePos(ev->value.mouse.x, ev->value.mouse.y);
-			if(pos.y > xinfo.wsr.h/2)
-				pageDown();
-			else
-				pageUp();
+		else if(ev->type == XEVT_MOUSE) {
+			if(ev->state == XEVT_MOUSE_MOVE) {
+				if(ev->value.mouse.button == MOUSE_BUTTON_SCROLL_UP)
+					pageDown();
+				else if(ev->value.mouse.button == MOUSE_BUTTON_SCROLL_DOWN)
+					pageUp();
+			}
+			else if(ev->state == XEVT_MOUSE_DRAG) {
+				int dy = ev->value.mouse.y - mouse_last_y;
+				if(dy > 10) {
+					pageUp();
+					mouse_last_y = ev->value.mouse.y;
+				}
+				else if(dy < -10) {
+					pageDown();
+					mouse_last_y = ev->value.mouse.y;
+				}
+			}
+			else if(ev->state == XEVT_MOUSE_DOWN) {
+				mouse_last_y = ev->value.mouse.y;
+			}
 		}
 	}
 public:
 	inline Book() {
 		read_len = 0;
+		mouse_last_y = 0;
 	}
 
 	inline ~Book() {
