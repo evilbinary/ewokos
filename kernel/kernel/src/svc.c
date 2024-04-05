@@ -10,6 +10,7 @@
 #include <kernel/kevqueue.h>
 #include <kernel/kconsole.h>
 #include <kernel/signal.h>
+#include <kernel/core.h>
 #include <mm/kalloc.h>
 #include <mm/shm.h>
 #include <mm/dma.h>
@@ -160,9 +161,17 @@ static void sys_waitpid(context_t* ctx, int32_t pid) {
 
 static void sys_load_elf(context_t* ctx, const char* cmd, void* elf, uint32_t elf_size) {
 	if(elf == NULL) {
+		printf("Panic: load elf content is NULL!\n");
 		ctx->gpr[0] = -1;
 		return;
 	}
+
+	if(strlen(cmd) >= PROC_INFO_MAX_CMD_LEN) {
+		printf("Panic: proc cmd line too long!\n");
+		ctx->gpr[0] = -1;
+		return;
+	}
+
 	proc_t* cproc = get_current_proc();
 	strcpy(cproc->info.cmd, cmd);
 	if(proc_load_elf(cproc, elf, elf_size) != 0) {
@@ -210,6 +219,10 @@ static void	sys_get_sys_info(sys_info_t* info) {
 	info->max_proc_num = _kernel_config.max_proc_num;
 	info->max_task_num = _kernel_config.max_task_num;
 	info->max_task_per_proc = _kernel_config.max_task_per_proc;
+
+	for(uint32_t i=0; i< _sys_info.cores; i++) {
+		info->core_idles[i] = _cpu_cores[i].halt_proc->info.run_usec;
+	}
 }
 
 static void	sys_get_sys_state(sys_state_t* info) {

@@ -3,21 +3,22 @@
 
 #include <x++/XWin.h>
 #include <string.h>
-#include <Widget/Theme.h>
 #include <ewoksys/klog.h>
 
 namespace Ewok {
 
 class Container;
 class RootWidget;
+class WidgetWin;
 class Widget {
 	Widget* next;
 	Widget* prev;
 
 	bool isContainer;
 protected:
-	Theme* themePrivate;
+	XTheme* themePrivate;
 	uint32_t id;
+	string   name;
 	int32_t marginH;
 	int32_t marginV;
 	Container* father;
@@ -26,22 +27,30 @@ protected:
 	bool fixed;
 	bool disabled;
 	bool alpha;
+	bool visible;
 
 	grect_t area;
 
 	virtual void onResize() { }
 	virtual void onMove() { }
 	virtual bool onMouse(xevent_t* ev);
-	virtual bool onKey(xevent_t* ev);
+	virtual bool onIM(xevent_t* ev);
+	virtual void onClick();
 
-	virtual void repaint(graph_t* g, const Theme* theme);
-	virtual void onRepaint(graph_t* g, const Theme* theme, const grect_t& r) = 0;
+	virtual void repaint(graph_t* g, XTheme* theme);
+	virtual void onRepaint(graph_t* g, XTheme* theme, const grect_t& r) = 0;
 	virtual void onTimer() { }
+	virtual void onFocus() { }
+	virtual void onUnfocus() { }
 	virtual bool onEvent(xevent_t* ev);
 public:
 	friend Container;
+	friend RootWidget;
+
+	void (*onClickFunc)(Widget* wd);
+
 	Widget(void);
-	~Widget(void);
+	virtual ~Widget(void);
 
 	inline void setMarginH(int32_t v) { marginH = v; }
 	inline void setMarginV(int32_t v) { marginV = v; }
@@ -49,9 +58,12 @@ public:
 	inline void setAlpha(bool alpha) { this->alpha = alpha; }
 	inline bool isAlpha() { return alpha; }
 	inline uint32_t getID() { return id; }
-	inline Theme* getTheme() { return themePrivate; }
+	inline void setID(uint32_t id) { this->id = id; }
+	inline const string& getName() { return name; }
+	inline void setName(const string& name) { this->name = name; }
+	inline XTheme* getTheme() { return themePrivate; }
 
-	void setTheme(Theme* theme);
+	void setTheme(XTheme* theme);
 	void disable();
 	void enable();
 	void fix(const gsize_t& size);
@@ -62,17 +74,20 @@ public:
 	void moveTo(int x, int y);
 	void move(int dx, int dy);
 	void setArea(int x, int y, int w, int h);
+	void show();
+	void hide();
 
 	RootWidget* getRoot(void);
+	WidgetWin*  getWin(void);
 	gpos_t getRootPos(int32_t x = 0, int32_t y = 0);
 	gpos_t getScreenPos(int32_t x = 0, int32_t y = 0);
 	gpos_t getInsidePos(int32_t screenX, int32_t screenY);
 	grect_t getRootArea(bool margin = true);
 	grect_t getScreenArea(bool margin = true);
+	bool   focused();
 
 	virtual gsize_t getMinSize(void);
 	void update();
-	virtual void sendEvent(xevent_t* ev);
 };
 
 }

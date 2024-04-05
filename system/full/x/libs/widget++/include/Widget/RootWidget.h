@@ -8,21 +8,23 @@ namespace Ewok {
 
 class WidgetWin;
 class RootWidget: public Container {
-	XWin* xwin;
+	WidgetWin* xwin;
 	bool doRefresh;
 	Widget* focusedWidget;
-	//void onRepaint(graph_t* g, const Theme* theme, const grect_t& r);
+	//void onRepaint(graph_t* g, XTheme* theme, const grect_t& r);
 public:
 	friend WidgetWin;
 	RootWidget();
-	inline XWin* getWin() { return xwin; }
-	inline void setWin(XWin* xwin) { this->xwin = xwin; }
+	inline WidgetWin* getWin() { return xwin; }
+	inline void setWin(WidgetWin* xwin) { this->xwin = xwin; }
 	inline void refresh() { doRefresh = true; }
-	inline void setFocus(Widget* wd) { focusedWidget = wd; }
+
+	void focus(Widget* wd);
+	inline Widget* getFocused() { return focusedWidget; }
 
 	void repaintWin();
 	void update();
-	void sendEvent(xevent_t* ev);
+	bool sendEvent(xevent_t* ev);
 };
 
 }

@@ -7,17 +7,27 @@ LDFLAGS = -L$(TARGET_DIR)/lib
 
 CXXFLAGS += -Iinclude -I$(TARGET_DIR)/include
 
-LIB_WIDGET_OBJS =  src/Widget.o \
-		src/Blank.o \
-		src/Container.o \
-		src/Theme.o \
-		src/Image.o \
-		src/Label.o \
-		src/Text.o \
-		src/Button.o \
-		src/LabelButton.o \
-		src/RootWidget.o \
-		src/WidgetWin.o
+LIB_WIDGET_OBJS =  src/Widget/Widget.o \
+		src/Widget/Blank.o \
+		src/Widget/Container.o \
+		src/Widget/Image.o \
+		src/Widget/Label.o \
+		src/Widget/ListBase.o \
+		src/Widget/List.o \
+		src/Widget/Grid.o \
+		src/Widget/Scrollable.o \
+		src/Widget/Scroller.o \
+		src/Widget/Button.o \
+		src/Widget/LabelButton.o \
+		src/Widget/RootWidget.o \
+		src/Widget/EditLine.o \
+		src/Widget/Text.o \
+		src/Widget/WidgetWin.o \
+		\
+		src/WidgetEx/FileWidget.o \
+		src/WidgetEx/Dialog.o \
+		src/WidgetEx/ConfirmDialog.o \
+		src/WidgetEx/FileDialog.o
 
 WIDGET = $(TARGET_DIR)/lib/libwidget++.a
 

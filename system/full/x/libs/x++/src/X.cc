@@ -8,37 +8,6 @@ using namespace Ewok;
 
 static font_t* _sysFont = NULL;
 
-bool X::open(uint32_t dispIndex, XWin* xwin, int x, int y, uint32_t w, uint32_t h, const char* title, uint32_t style) {
-	xscreen_t scr;
-	getScreenInfo(scr, dispIndex);
-
-	uint32_t minW = scr.size.w/3;
-	uint32_t minH = scr.size.h/3;
-	if(w == 0)
-		w = minW + random_to(scr.size.w - minW);
-	if(h == 0)
-		h = minH + random_to(scr.size.h - minH - 20);
-
-	if(x < 0) {
-		x = 0;
-		if(scr.size.w > w)
-			x = random_to(scr.size.w - w);
-	}
-
-	if(y < 0) {
-		y = 20;
-		if(scr.size.h > h)
-			y += (int32_t)random_to(scr.size.h - h);
-	}	
-	
-	xwin_t* xw = xwin_open(&this->x, dispIndex, x, y, w, h, title, style);
-	if(xw == NULL)
-		return false;
-	xwin->setX(this);
-	xwin->setCWin(xw);
-	return true;
-}
-
 X::X(void) {
 	x_init(&x, this);
 }
@@ -49,7 +18,7 @@ int X::getTheme(x_theme_t* theme) {
 
 font_t* X::getSysFont(void) {
 	if(_sysFont == NULL)
-		_sysFont = font_new(DEFAULT_SYSTEM_FONT, DEFAULT_SYSTEM_FONT_SIZE, true);
+		_sysFont = font_new(DEFAULT_SYSTEM_FONT, true);
 	return _sysFont;
 }
 

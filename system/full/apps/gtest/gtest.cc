@@ -62,7 +62,7 @@ protected:
 		int gW = g->w;
 		int gH = g->h;
 		graph_t* img = gW > (img_big->w*2) ? img_big: img_small;
-		uint32_t font_h = theme.getFont()->max_size.y;
+		uint32_t font_h = theme.basic.fontSize;
 
 		count++;
 
@@ -115,9 +115,8 @@ protected:
 
 		char str[32];
 		snprintf(str, 31, "EwokOS FPS: %d", fps);
-		font_text_size(str, theme.getFont(), (uint32_t*)&w, NULL);
 		graph_fill(g, imgX, imgY+img->h+2, img->w, font_h+4, 0xffffffff);
-		graph_draw_text_font(g, imgX+4, imgY+img->h+4, str, theme.getFont(), 0xff000000);
+		graph_draw_text_font(g, imgX+4, imgY+img->h+4, str, theme.getFont(), theme.basic.fontSize, 0xff000000);
 		drawImage(g, img);
 	}
 };
@@ -144,8 +143,7 @@ int main(int argc, char* argv[]) {
 
 	X x;
 	TestX xwin;
-	x.open(0, &xwin, -1, -1, 0, 0, "gtest", XWIN_STYLE_NORMAL);
-	xwin.setVisible(true);
+	xwin.open(&x, 0, -1, -1, 0, 0, "gtest", XWIN_STYLE_NORMAL);
 
 	_xwin = &xwin;
 	uint32_t tid = timer_set(10000, timer_handler);

@@ -55,6 +55,7 @@ enum {
 #define XWIN_STYLE_XIM       0x80
 #define XWIN_STYLE_LAUNCHER  0x100
 #define XWIN_STYLE_ANTI_FSCR 0x200 //anti full screen
+#define XWIN_STYLE_PROMPT    0x400 //prompt win
 
 #define XWIN_TITLE_MAX 32
 typedef struct {
@@ -71,21 +72,6 @@ typedef struct {
 	grect_t winr; //window rect
 	char title[XWIN_TITLE_MAX];
 } xinfo_t;
-
-#define THEME_NAME_MAX 128
-#define FONT_NAME_MAX 128
-typedef struct {
-	char     name[THEME_NAME_MAX];
-	char     fontName[FONT_NAME_MAX];
-	uint32_t fontSize;
-	uint32_t fontFixedSize;
-	uint32_t bgColor;
-	uint32_t fgColor;
-	uint32_t bgUnfocusColor;
-	uint32_t fgUnfocusColor;
-	uint32_t bgDisableColor;
-	uint32_t fgDisableColor;
-} x_theme_t;
 
 typedef struct {
 	int id;

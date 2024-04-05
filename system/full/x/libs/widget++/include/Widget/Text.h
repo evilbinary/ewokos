@@ -1,30 +1,36 @@
 #ifndef WIDGET_TEXT_HH
 #define WIDGET_TEXT_HH
 
-#include <Widget/Widget.h>
-#include <textview/textview.h>
-#include <string>
+#include <Widget/Scrollable.h>
 
-using namespace EwokSTL;
 namespace Ewok {
 
-class Text: public Widget {
-	textview_t textview;
-	string text;
-	graph_t* bufferGraph;
-	bool reset;
-	bool resetText;
+class Text: public Scrollable {
+	int last_mouse_down;
+
 protected:
-	void onRepaint(graph_t* g, const Theme* theme, const grect_t& r);
+    uint16_t *content;
+	int offset;
+    int contentSize;
+	int pageSize;
 
-public:
-	Text(const string& str);
-	~Text(void);
+	void onRepaint(graph_t* g, XTheme* theme, const grect_t& r);
 
-	void setText(const string& str);
-	void onFont();
+	bool onScroll(int step, bool horizontal);
+
+	void updateScroller();
+
+	bool onMouse(xevent_t* ev);
+
+public: 
+	Text();
+	~Text();
+
+    void setContent(const char* ctnt, uint32_t size);
+
+    inline int getOffset() { return offset; }
+    inline int getConttentSize() { return contentSize; }
 };
 
 }
-
 #endif

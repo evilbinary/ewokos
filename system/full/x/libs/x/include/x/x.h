@@ -4,6 +4,7 @@
 #include <graph/graph_ex.h>
 #include <x/xcntl.h>
 #include <x/xevent.h>
+#include <x/xtheme.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,6 +23,7 @@ struct st_xwin;
 
 typedef struct st_x {
 	struct st_xwin* main_win;
+	struct st_xwin* prompt_win;
 	void* data;
 	bool terminated;
 	x_event_t* event_head;

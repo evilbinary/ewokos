@@ -11,6 +11,7 @@
 #include <fb/fb.h>
 #include <ewoksys/ipc.h>
 #include <x/xcntl.h>
+#include <x/xtheme.h>
 #include <x/xevent.h>
 #include <x/xwm.h>
 #include <ewoksys/proc.h>
@@ -235,7 +236,7 @@ static void x_get_event(int from_pid, proto_t* out) {
 
 static void x_push_event(x_t* x, xwin_t* win, xevent_t* e) {
 	(void)x;
-	if(win->from_pid <= 0 || win->xinfo == NULL)
+	if(win == NULL || win->from_pid <= 0 || win->xinfo == NULL)
 		return;
 	e->win = win->xinfo->win;
 	xevent_push(win->from_pid, e);
@@ -715,6 +716,8 @@ static int do_xwin_try_focus(int fd, int from_pid, x_t* x) {
 		return -1;
 	if(!win->xinfo->visible)
 		return 0;
+
+	xwin_top(x, win);
 	try_focus(x, win);
 }
 
@@ -723,7 +726,7 @@ static int x_update(int fd, int from_pid, x_t* x) {
 		return -1;
 	
 	xwin_t* win = x_get_win(x, fd, from_pid);
-	if(win == NULL || win->xinfo == NULL)
+	if(win == NULL || win->xinfo == NULL || win->g == NULL)
 		return -1;
 	if(!win->xinfo->visible)
 		return 0;
@@ -1124,15 +1127,17 @@ static void mouse_xwin_handle(x_t* x, xwin_t* win, int pos, xevent_t* ev) {
 	}
 	else if(ev->state ==  XEVT_MOUSE_DRAG) {
 		if(win->xinfo->state != XWIN_STATE_MAX) {
-			x->current.win_drag = win;
-			if(pos == FRAME_R_TITLE) {//window title 
-				//x->current.win_drag = win;
+			if((win->xinfo->style & XWIN_STYLE_NO_FRAME) != 0) {
+				x->current.win_drag = win;
+			}
+			else if(pos == FRAME_R_TITLE) {//window title 
+				x->current.win_drag = win;
 				x->current.old_pos.x = x->cursor.cpos.x;
 				x->current.old_pos.y = x->cursor.cpos.y;
 				x->current.drag_state = X_win_DRAG_MOVE;
 			}
 			else if(pos == FRAME_R_RESIZE) {//window resize
-				//x->current.win_drag = win;
+				x->current.win_drag = win;
 				x->current.old_pos.x = x->cursor.cpos.x;
 				x->current.old_pos.y = x->cursor.cpos.y;
 				x->current.drag_state = X_win_DRAG_RESIZE;

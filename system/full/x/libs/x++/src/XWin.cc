@@ -1,7 +1,10 @@
 #include "x++/XWin.h"
+#include "x++/X.h"
 #include <stdio.h>
 #include <string.h>
 #include <font/font.h>
+#include <ewoksys/basic_math.h>
+#include <ewoksys/klog.h>
 
 using namespace Ewok;
 
@@ -29,6 +32,7 @@ static void _on_resize(xwin_t* xw) {
 	XWin* xwin = (XWin*)xw->data;
 	if(xwin == NULL)
 		return;
+
 	xwin->__doResize();
 }
 
@@ -41,13 +45,13 @@ static void _on_move(xwin_t* xw) {
 	xwin->__doMove();
 }
 
-static void _on_close(xwin_t* xw) {
+static bool _on_close(xwin_t* xw) {
 	if(xw == NULL)
-		return;
+		return false;
 	XWin* xwin = (XWin*)xw->data;
 	if(xwin == NULL)
-		return;
-	xwin->__doClose();
+		return false;
+	return xwin->__doClose();
 }
 
 static void _on_focus(xwin_t* xw) {
@@ -89,14 +93,58 @@ static void _on_event(xwin_t* xw, xevent_t* ev) {
 XWin::XWin(void) {
 	font_init();
 	theme.loadSystem();
-	this->xwin = NULL;
+	displayIndex = 0;
+	xwin = NULL;
 }
 
 void XWin::close() {
 	if(xwin == NULL)
 		return;
 	xwin_close(xwin);
+	xwin_destroy(xwin);
 	xwin = NULL;
+}
+
+bool XWin::open(X* xp, uint32_t dispIndex, int x, int y, uint32_t w, uint32_t h,
+		const char* title, uint32_t style, bool visible) {
+	if(xp == NULL)
+		return false;
+	displayIndex = dispIndex;
+
+	xscreen_t scr;
+	X::getScreenInfo(scr, dispIndex);
+
+	uint32_t minW = scr.size.w/3;
+	uint32_t minH = scr.size.h/3;
+	if(w == 0)
+		w = minW + random_to(scr.size.w - minW);
+	if(h == 0)
+		h = minH + random_to(scr.size.h - minH - 20);
+
+	if(x < 0) {
+		x = 0;
+		if(scr.size.w > w)
+			x = random_to(scr.size.w - w);
+	}
+
+	if(y < 0) {
+		y = 20;
+		if(scr.size.h > h)
+			y += (int32_t)random_to(scr.size.h - h);
+	}	
+
+	xwin_t* xw = xwin_open(xp->c_x(), dispIndex, x, y, w, h, title, style);
+	if(xw == NULL)
+		return false;
+	this->x = xp;
+	setCWin(xw);
+	onOpen();
+	setVisible(visible);
+	return true;
+}
+
+bool XWin::open(X* xp, uint32_t dispIndex, const grect_t& r, const char* title, uint32_t style, bool visible) {
+	return open(xp, dispIndex, r.x, r.y, r.w, r.h, title, style, visible);
 }
 
 bool XWin::setVisible(bool visible) {

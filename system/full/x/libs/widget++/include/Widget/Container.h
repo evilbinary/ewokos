@@ -15,8 +15,9 @@ class Container: public Blank {
 
 protected:
 	void onResize();
+	void onLayout();
 	bool onEvent(xevent_t* ev);
-	void repaint(graph_t* g, const Theme* theme);
+	void repaint(graph_t* g, XTheme* theme);
 	void onTimer();
 
 public:
@@ -27,6 +28,7 @@ public:
 	void layout();
 	void add(Widget* child);
 	Widget* get(uint32_t id);
+	Widget* get(const string& name);
 	void setType(int type);
 	void clear();
 
