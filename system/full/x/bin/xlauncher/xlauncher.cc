@@ -40,6 +40,15 @@ class AppList: public List {
 		ret = ret + appName + "/res/icon.png";
 		return ret;
 	}
+
+	void clearItem() {
+		for(int i=0; i<ITEM_MAX; i++) {
+			if(items[i].iconImg != NULL) {
+				graph_free(items[i].iconImg);
+				items[i].iconImg = NULL;
+			}
+		}
+	}
  
 	void drawIcon(graph_t* g, int at, XTheme* theme, int x, int y, int w, int h) {
 		item_t* item = &items[at];
@@ -75,9 +84,7 @@ class AppList: public List {
 		y += (h - (int)(iconSize + titleMargin + (int32_t)th)) /2 +
 				iconSize + titleMargin;
 
-		graph_draw_text_font(g, x, y, title, theme->getFont(), theme->basic.fontSize, 0xff000000);
-		if(at == itemSelected)
-			graph_draw_text_font(g, x-1, y-1, title, theme->getFont(), theme->basic.fontSize, 0xffffffff);
+		graph_draw_text_font(g, x, y, title, theme->getFont(), theme->basic.fontSize, theme->basic.fgColor);
 	}
 
 	bool loadApps(var_t* var) {
@@ -111,7 +118,7 @@ class AppList: public List {
 
 protected:
 	void drawBG(graph_t* g, XTheme* theme, const grect_t& r) {
-		graph_fill(g, r.x, r.y, r.w, r.h, 0xffbbbbbb);
+		graph_fill(g, r.x, r.y, r.w, r.h, theme->basic.bgColor);
 	}
 
 	void drawItem(graph_t* g, XTheme* theme, int32_t index, const grect_t& r) {
@@ -125,6 +132,8 @@ protected:
 	void onEnter(int index) {
 		int pid = fork();
 		if(pid == 0) {
+			clearItem();
+			proc_detach();
 			proc_exec(items[index].fname.c_str()); 
 		}
 	}
@@ -134,6 +143,10 @@ public:
 		iconSize = 32;
 		for(int i=0; i<ITEM_MAX; i++)
 			memset(&items[i], 0, sizeof(item_t));
+	}
+
+	~AppList() {
+		clearItem();
 	}
 
 	bool loadConfig() {
@@ -206,7 +219,7 @@ int main(int argc, char** argv) {
 		wr.y = desk.h-itemSize;
 		wr.w = itemSize*itemNum;
 		wr.h = itemSize;
-		apps->setHorizontal(true);
+		apps->setDefaultScrollType(Scrollable::SCROLL_TYPE_H);
 	}
 
 	win.open(&x, 0, wr, "xlauncher",

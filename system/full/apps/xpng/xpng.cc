@@ -39,18 +39,19 @@ class ImageView: public Scrollable {
 	StatusLabel* statusLabel;
 
 	void background(graph_t* g, uint32_t sz, const grect_t& r) {
+		graph_set(g, r.x, r.y, r.w, r.h, 0);
 		int x = r.x;
 		int y = r.y;
 		uint32_t c1;
 		uint32_t c2;
 		for(int i=0; ;i++) {
 			if((i%2) == 0) {
-				c1 = 0xff888888;
-				c2 = 0xff4444444;
+				c1 = 0x88888888;
+				c2 = 0x884444444;
 			}
 			else {
-				c2 = 0xff888888;
-				c1 = 0xff444444;
+				c2 = 0x88888888;
+				c1 = 0x88444444;
 			}
 
 			for(int j=0; ;j++) {
@@ -85,7 +86,21 @@ protected:
 	}
 
 	bool onScroll(int step, bool horizontal) {
-		return false;
+		if(horizontal) {
+			off_x -=  step * dragStep;
+			if(off_x < 0)
+				off_x = 0;
+			else if(off_x > (img->w-area.w))
+				off_x = img->w-area.w;
+		}
+		else {
+			off_y -= step * dragStep;
+			if(off_y < 0)
+				off_y = 0;
+			else if(off_y > (img->h-area.h))
+				off_y = img->h-area.h;
+		}
+		return true;
 	}
 
 	void onResize() {
@@ -106,38 +121,9 @@ protected:
 	}
 
 	bool onMouse(xevent_t* ev) {
-		gpos_t ipos = getInsidePos(ev->value.mouse.x, ev->value.mouse.y);
-		if(ev->state == XEVT_MOUSE_DOWN) {
-			last_mouse_down.x = ipos.x;
-			last_mouse_down.y = ipos.y;
-		}
-		else if(ev->state == XEVT_MOUSE_DRAG) {
-			int dx = last_mouse_down.x - ipos.x;
-			int dy =  last_mouse_down.y - ipos.y;
+		Scrollable::onMouse(ev);
 
-			if(abs_32(dx) > 10 && img->w > area.w) {
-				off_x +=  dx;
-				last_mouse_down.x = ipos.x;
-				if(off_x < 0)
-					off_x = 0;
-				else if(off_x > (img->w-area.w))
-					off_x = img->w-area.w;
-				updateScroller();
-				update();
-			}
-			
-			if(abs_32(dy) > 10 && img->h > area.h) {
-				off_y +=  dy;
-				last_mouse_down.y = ipos.y;
-				if(off_y < 0)
-					off_y = 0;
-				else if(off_y > (img->h-area.h))
-					off_y = img->h-area.h;
-				updateScroller();
-				update();
-			}
-		}
-		else if(ev->state == XEVT_MOUSE_MOVE) {
+		if(ev->state == XEVT_MOUSE_MOVE) {
 			if(ev->value.mouse.button == MOUSE_BUTTON_SCROLL_UP) {
 				zoom += 0.2;
 				if(zoom > 2.0)
@@ -207,6 +193,7 @@ public:
 		last_mouse_down.x = 0;
 		last_mouse_down.y = 0;
 		statusLabel = NULL;
+		alpha = true;
 	}
 
 	~ImageView() {
@@ -259,7 +246,7 @@ class LoadButton: public LabelButton {
 	PngWin* pngWin;
 	ImageView* imgView;
 protected:
-	void onClick() {
+	void onClick(xevent_t* ev) {
 		pngWin->load(imgView, "");
 	}
 public:
@@ -275,7 +262,7 @@ int main(int argc, char** argv) {
 	RootWidget* root = new RootWidget();
 	win.setRoot(root);
 	root->setType(Container::VERTICLE);
-	root->setAlpha(false);
+	root->setAlpha(true);
 
 	Container* c = new Container();
 	c->setType(Container::HORIZONTAL);

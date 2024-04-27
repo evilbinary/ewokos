@@ -11,6 +11,7 @@
 #include <kernel/kconsole.h>
 #include <kernel/signal.h>
 #include <kernel/core.h>
+#include <kernel/trace.h>
 #include <mm/kalloc.h>
 #include <mm/shm.h>
 #include <mm/dma.h>
@@ -28,7 +29,7 @@ static uint32_t _svc_total;
 
 static void sys_kprint(const char* s, int32_t len) {
 	(void)len;
-	kout(s);
+	printf("%s", s);
 }
 
 static void sys_exit(context_t* ctx, int32_t res) {
@@ -665,6 +666,18 @@ static inline void sys_root(void) {
 #endif
 }
 
+static int sys_get_trace(int arg0) {
+#ifdef SCHD_TRACE
+	return get_trace((trace_t*)arg0);
+#endif
+}
+
+static int sys_get_trace_fps(void) {
+#ifdef SCHD_TRACE
+	return get_trace_fps();
+#endif
+}
+
 static inline void _svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_t arg2, context_t* ctx) {
 	_svc_total++;
 	_svc_counter[code]++;
@@ -861,6 +874,12 @@ static inline void _svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_
 		return;	
 	case SYS_CLOSE_KCONSOLE:	
 		sys_root();
+		return;	
+	case SYS_GET_TRACE:	
+		ctx->gpr[0] = sys_get_trace(arg0);
+		return;	
+	case SYS_GET_TRACE_FPS:	
+		ctx->gpr[0] = sys_get_trace_fps();
 		return;	
 	}
 }

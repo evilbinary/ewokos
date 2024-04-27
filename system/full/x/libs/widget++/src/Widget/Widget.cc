@@ -35,14 +35,14 @@ void Widget::setTheme(XTheme* theme)  {
 	update();
 }
 
-void Widget::onClick() {
+void Widget::onClick(xevent_t* ev) {
 	if(onClickFunc != NULL)
 		onClickFunc(this);
 }
 
 bool Widget::onMouse(xevent_t* ev) {
 	if(ev->state == XEVT_MOUSE_CLICK) {
-		onClick();
+		onClick(ev);
 		return true;
 	}
 	return false;
@@ -53,23 +53,33 @@ bool Widget::onIM(xevent_t* ev) {
 }
 
 bool Widget::onEvent(xevent_t* ev) { 
-	if(disabled)
+	if(!visible)
 		return false;
 
+	bool ret = false;
 	if(ev->type == XEVT_MOUSE) {
 		grect_t r = getScreenArea();
 		if(ev->value.mouse.x > r.x && ev->value.mouse.x < (r.x+r.w) &&
 				ev->value.mouse.y > r.y && ev->value.mouse.y < (r.y+r.h)) {
 			if(ev->state == XEVT_MOUSE_DOWN) {
 				getRoot()->focus(this);
+				ret = true;
 			}
-			return onMouse(ev);
+			if(!disabled && 
+					ev->state != XEVT_MOUSE_UP &&
+					ev->state != XEVT_MOUSE_DRAG)
+				return onMouse(ev);
 		}
+		if(!disabled && 
+				(ev->state == XEVT_MOUSE_UP || ev->state == XEVT_MOUSE_DRAG) &&
+				getRoot()->getFocused() == this)
+			return onMouse(ev);
 	}
-	else if(ev->type == XEVT_IM && getRoot()->getFocused() == this) {
+	else if(!disabled &&
+			ev->type == XEVT_IM && getRoot()->getFocused() == this) {
 		return onIM(ev);
 	}
-	return false; 
+	return ret; 
 }
 
 RootWidget* Widget::getRoot(void) {
@@ -89,6 +99,16 @@ WidgetWin* Widget::getWin(void) {
 	return root->getWin();
 }
 
+void Widget::setAlpha(bool alpha) {
+	this->alpha = alpha;
+	WidgetWin* win = getWin();
+	if(win == NULL)
+		return;
+
+	if(win->getRoot() == this)
+		win->setAlpha(alpha);
+}
+
 void Widget::repaint(graph_t* g, XTheme* theme) {
 	if(!dirty || !visible)
 		return;
@@ -96,6 +116,11 @@ void Widget::repaint(graph_t* g, XTheme* theme) {
 		theme = this->themePrivate;
 
 	grect_t r = getRootArea();
+	if(r.w <= 0 || r.h <= 0) {
+		dirty = false;
+		return;
+	}
+
 	graph_set_clip(g, r.x, r.y, r.w, r.h);
 	onRepaint(g, theme, r);
 	dirty = false;
@@ -147,6 +172,11 @@ void Widget::fix(const gsize_t& size) {
 void Widget::resizeTo(int w, int h) {
 	if(area.w == w && area.h == h)
 		return;
+	if(w < 0)
+		w = 0;
+	if(h < 0)
+		h = 0;
+
 	area.w = w;
 	area.h = h;
 	onResize();

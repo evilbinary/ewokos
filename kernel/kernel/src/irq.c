@@ -62,6 +62,11 @@ static inline void irq_do_timer0(context_t* ctx) {
 	int32_t do_schedule = 0;
 
 	uint32_t usec_gap = usec - _last_usec;
+
+#ifdef SCHD_TRACE
+	update_trace(usec_gap);
+#endif
+
 	_last_usec = usec;
 	_kernel_usec += usec_gap;
 	_sec_tic += usec_gap;
