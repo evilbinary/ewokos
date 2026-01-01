@@ -7,16 +7,11 @@
 #include <kprintf.h>
 #include <stddef.h>
 
-uint32_t get_kmalloc_size(void) {
-	return _kernel_config.kmalloc_size == 0 ?
-			MIN_KMALLOC_SIZE : _kernel_config.kmalloc_size;
-}
-
 /*
 kmalloc manage the memory(from KMALLOC_BASE to KMALLOC_END) for kernel.
 */
 static malloc_t _kmalloc;
-static uint32_t _kmalloc_mem_tail;
+static ewokos_addr_t _kmalloc_mem_tail;
 
 static void km_shrink(void* arg, int32_t pages) {
 	(void)arg;
@@ -25,7 +20,7 @@ static void km_shrink(void* arg, int32_t pages) {
 
 static int32_t km_expand(void* arg, int32_t pages) {
 	(void)arg;
-	uint32_t to = _kmalloc_mem_tail + (pages * PAGE_SIZE);
+	ewokos_addr_t to = _kmalloc_mem_tail + (pages * PAGE_SIZE);
 	if(to > KMALLOC_END) //over flow
 		return -1;
 
@@ -39,12 +34,18 @@ static void* km_get_mem_tail(void* arg) {
 	return (void*)_kmalloc_mem_tail;
 }
 
+static void* km_get_mem_top(void* arg) {
+	(void)arg;
+	return (void*)KMALLOC_END;
+}
+
 void kmalloc_init() {
 	memset(&_kmalloc, 0, sizeof(malloc_t));
 	_kmalloc_mem_tail = KMALLOC_BASE;
 	_kmalloc.expand = km_expand;
 	_kmalloc.shrink = km_shrink;
 	_kmalloc.get_mem_tail = km_get_mem_tail;
+	_kmalloc.get_mem_top = km_get_mem_top;
 	_kmalloc.arg = NULL;
 }
 
@@ -66,4 +67,8 @@ void kfree(void* p) {
 	if(p == 0)
 		return;
 	trunk_free(&_kmalloc, p);
+}
+
+uint32_t  kmalloc_free_size(void) {
+	return trunk_free_size(&_kmalloc);
 }

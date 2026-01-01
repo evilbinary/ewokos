@@ -57,7 +57,7 @@ sock_alloc(void)
             return entry;
         }
     }
-    klog("no free socket\n");
+    slog("no free socket\n");
     return NULL;
 }
 
@@ -115,7 +115,7 @@ int
 sock_close(int id)
 {
     struct sock *s;
-    klog("sock close %d\n", id);
+    slog("sock close %d\n", id);
     s = sock_get(id);
     if (!s) {
         return -17;
@@ -253,7 +253,7 @@ sock_accept(int id, struct sockaddr *addr, int *addrlen)
         ((struct sockaddr_in *)addr)->sin_addr = ep.addr;
         ((struct sockaddr_in *)addr)->sin_port = ep.port;
         new_s = sock_alloc();
-        klog("sock accept %d %d\n",  indexof(socks, new_s), ret);
+        slog("sock accept %d %d\n",  indexof(socks, new_s), ret);
         if(new_s){
             new_s->family = s->family;
             new_s->type = s->type;

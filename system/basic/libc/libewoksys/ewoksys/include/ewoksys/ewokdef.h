@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <ewokos_config.h>
 
-typedef uint32_t addr_t;
 
 #endif

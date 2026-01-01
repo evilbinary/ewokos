@@ -6,8 +6,12 @@
 #include <sys/errno.h>
 #include <ewoksys/session.h>
 #include <ewoksys/mstr.h>
+#include <ewoksys/core.h>
 #include <ewoksys/keydef.h>
 #include <ewoksys/vfs.h>
+#include <setenv.h>
+
+void putch(int c);
 
 static session_info_t* check(const char* user, const char* password, int* res) {
 	static session_info_t info;
@@ -62,6 +66,7 @@ static void input(str_t* s, bool show) {
 		c = telnet_parse(c);
 		if(c == 0)
 			continue;
+		
 		if(i <= 0 || c == 0) {
 		 	if(errno != EAGAIN)
 			//if(i == 0)
@@ -84,8 +89,15 @@ static void input(str_t* s, bool show) {
 		else {
 			if(show || c == '\n')
 				write(1, &c, 1);
+	
 			if(c == '\n')
-				break;
+				break;		
+
+			if(!show) {
+				char x = '*';
+				write(1, &x, 1);
+			}
+
 			if(c > 27)
 				str_addc(s, c);
 		}
@@ -129,13 +141,13 @@ int main(int argc, char* argv[]) {
 
 		int res = setgid(info->gid);
 		if(res != 0) {
-			dprintf(3, "Error, setgid failed!\n");
+			fprintf(stderr, "Error, setgid failed!\n");
 			return -1;
 		}
 
 		res = setuid(info->uid);
 		if(res != 0) {
-			dprintf(3, "Error, setuid failed!\n");
+			fprintf(stderr, "Error, setuid failed!\n");
 			return -1;
 		}
 	}

@@ -61,18 +61,18 @@ icmp_dump(const uint8_t *data, size_t len)
     struct icmp_echo *echo;
 
     hdr = (struct icmp_hdr *)data;
-    klog( "       type: %u (%s)\n", hdr->type, icmp_type_ntoa(hdr->type));
-    klog( "       code: %u\n", hdr->code);
-    klog( "        sum: 0x%04x (0x%04x)\n", ntoh16(hdr->sum), ntoh16(cksum16((uint16_t *)data, len, -hdr->sum)));
+    slog( "       type: %u (%s)\n", hdr->type, icmp_type_ntoa(hdr->type));
+    slog( "       code: %u\n", hdr->code);
+    slog( "        sum: 0x%04x (0x%04x)\n", ntoh16(hdr->sum), ntoh16(cksum16((uint16_t *)data, len, -hdr->sum)));
     switch (hdr->type) {
     case ICMP_TYPE_ECHOREPLY:
     case ICMP_TYPE_ECHO:
         echo = (struct icmp_echo *)hdr;
-        klog( "         id: %u\n", ntoh16(echo->id));
-        klog( "        seq: %u\n", ntoh16(echo->seq));
+        slog( "         id: %u\n", ntoh16(echo->id));
+        slog( "        seq: %u\n", ntoh16(echo->seq));
         break;
     default:
-        klog( "     values: 0x%08x\n", ntoh32(hdr->values));
+        slog( "     values: 0x%08x\n", ntoh32(hdr->values));
         break;
     }
 #ifdef HEXDUMP

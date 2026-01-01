@@ -8,10 +8,8 @@
 #include <kernel/hw_info.h>
 #include <kernel/semaphore.h>
 #include <kernel/kevqueue.h>
-#include <kernel/kconsole.h>
 #include <kernel/signal.h>
 #include <kernel/core.h>
-#include <kernel/trace.h>
 #include <mm/kalloc.h>
 #include <mm/shm.h>
 #include <mm/dma.h>
@@ -29,7 +27,7 @@ static uint32_t _svc_total;
 
 static void sys_kprint(const char* s, int32_t len) {
 	(void)len;
-	printf("%s", s);
+	kout(s);
 }
 
 static void sys_exit(context_t* ctx, int32_t res) {
@@ -86,7 +84,7 @@ static int32_t sys_get_thread_id(void) {
 static void sys_usleep(context_t* ctx, uint32_t count) {
 	proc_t * cproc = get_current_proc();
 	ipc_task_t* ipc = proc_ipc_get_task(cproc);
-	if(cproc->space->interrupt.state != INTR_STATE_IDLE)
+	if(cproc->info.type == TASK_TYPE_PROC && cproc->space->interrupt.state != INTR_STATE_IDLE)
 		return;
 
 	//no sleep longer than 100000 usec when handling interrupter/ipc task .
@@ -143,7 +141,7 @@ static void sys_detach(void) {
 	cproc->info.father_pid = 0;
 }
 
-static void sys_thread(context_t* ctx, uint32_t entry, uint32_t func, int32_t arg) {
+static void sys_thread(context_t* ctx, ewokos_addr_t entry, ewokos_addr_t func, ewokos_addr_t arg) {
 	ctx->gpr[0] = -1;
 	proc_t *proc = kfork(ctx, TASK_TYPE_THREAD);
 	if(proc == NULL)
@@ -231,10 +229,15 @@ static void	sys_get_sys_state(sys_state_t* info) {
 		return;
 
 	info->mem.free = get_free_mem_size();
+	info->mem.kfree = kmalloc_free_size();
 	info->mem.shared = shm_alloced_size();
-	info->kernel_sec = _kernel_sec;
+	info->kernel_usec = _kernel_usec;
 	info->svc_total = _svc_total;
 	memcpy(info->svc_counter, _svc_counter, SYS_CALL_NUM*4);
+}
+
+static vsyscall_info_t* sys_get_vsyscall_info(void) {
+	return _kernel_vsyscall_info;
 }
 
 static int32_t sys_shm_get(int32_t id, uint32_t size, int32_t flag) {
@@ -250,49 +253,71 @@ static int32_t sys_shm_unmap(void* p) {
 	proc_t* cproc = proc_get_proc(get_current_proc());
 	return shm_proc_unmap(cproc, p);
 }
-
-static int32_t sys_shm_ref(int32_t id) {
-	proc_t* cproc = proc_get_proc(get_current_proc());
-	return shm_proc_ref(cproc->info.pid, id);
-}
-	
-static uint32_t sys_dma_map(uint32_t size) {
+		
+static ewokos_addr_t sys_dma_alloc(int32_t dma_block_id, uint32_t size) {
 	proc_t* cproc = proc_get_proc(get_current_proc());
 	if(cproc->info.uid > 0)
 		return 0;
 
-	uint32_t paddr = dma_alloc(cproc->info.pid, size);
+	ewokos_addr_t paddr = dma_alloc(dma_block_id, cproc->info.pid, size);
 	if(paddr == 0)
 		return 0;
+	ewokos_addr_t vaddr = dma_v_addr(dma_block_id, paddr);
+	if(vaddr == 0)
+		return 0;
 
-	map_pages_size(cproc->space->vm, paddr, paddr, size, AP_RW_RW, PTE_ATTR_DEV);
+	map_pages_size(cproc->space->vm, vaddr, paddr, size, AP_RW_RW, PTE_ATTR_NOCACHE);
 	flush_tlb();
-	return paddr;
+	return vaddr;
 }
 
-static uint32_t sys_mem_map(uint32_t vaddr, uint32_t paddr, uint32_t size) {
+static void sys_dma_free(int32_t dma_block_id, ewokos_addr_t vaddr) {
+	proc_t* cproc = proc_get_proc(get_current_proc());
+	if(cproc->info.uid > 0)
+		return;
+
+	ewokos_addr_t paddr = dma_phy_addr(dma_block_id, vaddr);
+	if(paddr == 0)
+		return;
+	uint32_t size = dma_size(dma_block_id, cproc->info.pid, paddr);
+	dma_free(dma_block_id, cproc->info.pid, paddr);
+
+	unmap_pages(cproc->space->vm, vaddr, size/PAGE_SIZE);
+	flush_tlb();
+}
+
+static int32_t sys_dma_set(ewokos_addr_t phy_base, uint32_t size, bool shared) {
+	proc_t* cproc = get_current_proc();
+	if(cproc == NULL)
+		return -1;
+	return dma_set(cproc->info.pid, phy_base, phy_base, size, shared);
+}
+
+static ewokos_addr_t sys_dma_phy(int32_t dma_block_id, ewokos_addr_t vaddr) {
+	return dma_phy_addr(dma_block_id, vaddr);
+}
+
+static uint32_t sys_mem_map(ewokos_addr_t vaddr, ewokos_addr_t paddr, uint32_t size) {
 	proc_t* cproc = proc_get_proc(get_current_proc());
 	if(cproc->info.uid > 0)
 		return 0;
-
-	if(paddr == DMA_MAGIC)
-		return sys_dma_map(size);
 
 	/*allocatable memory can only mapped by kernel,
 	userspace can map upper address such as MMIO/FRAMEBUFFER... */
-	if(paddr > _allocable_phy_mem_base && paddr < _allocable_phy_mem_top)
+	if(check_mem_map_arch(paddr, size) != 0)
 		return 0;
+
 	map_pages_size(cproc->space->vm, vaddr, paddr, size, AP_RW_RW, PTE_ATTR_DEV);	
 	flush_tlb();
 	return vaddr;
 }
 
-static void sys_ipc_setup(context_t* ctx, uint32_t entry, uint32_t extra_data, uint32_t flags) {
+static void sys_ipc_setup(context_t* ctx, ewokos_addr_t entry, ewokos_addr_t extra_data, uint32_t flags) {
 	proc_t* cproc = get_current_proc();
 	ctx->gpr[0] = proc_ipc_setup(ctx, entry, extra_data, flags);
 }
 
-static void sys_ipc_call(context_t* ctx, int32_t serv_pid, int32_t call_id, proto_t* data) {
+static void sys_ipc_call(context_t* ctx, int32_t serv_pid, int32_t call_id, proto_t* arg) {
 	ctx->gpr[0] = 0;
 
 	proc_t* client_proc = get_current_proc();
@@ -304,9 +329,16 @@ static void sys_ipc_call(context_t* ctx, int32_t serv_pid, int32_t call_id, prot
 		return;
 	}
 
+
 	if(serv_proc == NULL ||
 			serv_proc->space->ipc_server.entry == 0) {//no ipc service setup
 		//printf("ipc not ready (client: %d, server: %d, call: 0x%x\n", client_proc->info.pid, serv_pid, call_id);
+		return;
+	}
+
+	if(client_proc->info.type == TASK_TYPE_PROC && client_proc->space->interrupt.state == INTR_STATE_WORKING) {
+		printf("ipc can't call in interrupt (client: %d, server: %d, call: 0x%x\n",
+				client_proc->info.pid, serv_pid, call_id);
 		return;
 	}
 
@@ -326,21 +358,19 @@ static void sys_ipc_call(context_t* ctx, int32_t serv_pid, int32_t call_id, prot
 		//serv_proc->space->interrupt.saved_state.state = READY;
 	}
 
-	ipc_task_t* ipc = proc_ipc_req(serv_proc, client_proc, call_id, data);
+	ipc_task_t* ipc = proc_ipc_req(serv_proc, client_proc, call_id, arg);
 	if(ipc == NULL) {
 		ctx->gpr[0] = -1; 
-		proc_block_on(ctx, client_proc->info.pid, (uint32_t)&client_proc->ipc_buffer_clean); 
+		proc_block_on(ctx, serv_pid, (uint32_t)&serv_proc->space->ipc_server);
 		return;
 	}
 
 	client_proc->ipc_res.state = IPC_BUSY;
 	ctx->gpr[0] = ipc->uid;
-	if(ipc != proc_ipc_get_task(serv_proc)) // buffered ipc
-		return;
 	proc_ipc_do_task(ctx, serv_proc, client_proc->info.core);
 }
 
-static void sys_ipc_get_return_size(context_t* ctx, int32_t pid, uint32_t uid) {
+static void sys_ipc_get_return(context_t* ctx, int32_t pid, uint32_t uid, proto_t* data) {
 	ctx->gpr[0] = 0;
 	proc_t* client_proc = get_current_proc();
 	if(uid == 0 || client_proc == NULL) {
@@ -370,36 +400,13 @@ static void sys_ipc_get_return_size(context_t* ctx, int32_t pid, uint32_t uid) {
 		return;
 	}
 
-	ctx->gpr[0] = client_proc->ipc_res.data.size;
-}
-
-static void sys_ipc_get_return(context_t* ctx, int32_t pid, uint32_t uid, proto_t* data) {
-	ctx->gpr[0] = 0;
-	proc_t* client_proc = get_current_proc();
-	if(uid == 0 || client_proc == NULL) {
-		ctx->gpr[0] = -2;
-		return;
-	}
-	pid = get_proc_pid(pid);
-
-	if(client_proc->ipc_res.state != IPC_RETURN) { //block retry for serv return
-		proc_t* serv_proc = proc_get(pid);
-		ipc_task_t* ipc = proc_ipc_get_task(serv_proc);
-		if(ipc == NULL || ipc->uid != uid) {
-			ctx->gpr[0] = -2;
+	if(data != NULL && data->data != NULL) {
+		if(data->total_size >= client_proc->ipc_res.data.size)
+			proto_copy(data, client_proc->ipc_res.data.data, client_proc->ipc_res.data.size);
+		else {
+			ctx->gpr[0] = client_proc->ipc_res.data.size; //return ret_arg size if input pkg not big enought
 			return;
 		}
-		return;
-	}
-
-	if(client_proc->ipc_res.uid != uid) {
-		ctx->gpr[0] = -2;
-		return;
-	}
-
-	if(data != NULL && data->data != NULL && 
-				data->size == client_proc->ipc_res.data.size) {
-		memcpy(data->data, client_proc->ipc_res.data.data, data->size);
 	}
 
 	client_proc->ipc_res.uid = 0;
@@ -407,7 +414,7 @@ static void sys_ipc_get_return(context_t* ctx, int32_t pid, uint32_t uid, proto_
 	proto_clear(&client_proc->ipc_res.data);
 }
 
-static int32_t sys_ipc_get_info_size(uint32_t uid) {
+static int32_t sys_ipc_get_info(uint32_t uid, int32_t* ipc_info, proto_t* arg) {
 	proc_t* serv_proc = proc_get_proc(get_current_proc());
 	ipc_task_t* ipc = proc_ipc_get_task(serv_proc);
 	if(uid == 0 ||
@@ -417,27 +424,17 @@ static int32_t sys_ipc_get_info_size(uint32_t uid) {
 			serv_proc->space->ipc_server.entry == 0) {
 		return -1;
 	}
-	return ipc->data.size;
-}
-
-static int32_t sys_ipc_get_info(uint32_t uid, int32_t* ipc_info, proto_t* ipc_arg) {
-	proc_t* serv_proc = proc_get_proc(get_current_proc());
-	ipc_task_t* ipc = proc_ipc_get_task(serv_proc);
-	if(uid == 0 ||
-			ipc == NULL ||
-			ipc->uid != uid ||
-			ipc->state != IPC_BUSY ||
-			serv_proc->space->ipc_server.entry == 0 ||
-			ipc->data.size != ipc_arg->size) {
-		return -1;
-	}
 
 	//ipc_info[0] = get_proc_pid(ipc->client_pid);
 	ipc_info[0] = ipc->client_pid;
 	ipc_info[1] = ipc->call_id;
-	if(ipc_arg->data != NULL)
-		memcpy(ipc_arg->data, ipc->data.data, ipc->data.size);
-	proto_clear(&ipc->data);
+
+	if(arg != NULL) {
+		if(arg->total_size >= ipc->arg_ret.size && ipc->arg_ret.data != NULL)
+			proto_copy(arg, ipc->arg_ret.data, ipc->arg_ret.size);
+		else
+			return ipc->arg_ret.size;
+	}
 	return 0;
 }
 
@@ -473,7 +470,7 @@ static void sys_ipc_end(context_t* ctx) {
 			ipc == NULL)
 		return;
 
-	proc_restore_state(ctx, serv_proc, &serv_proc->space->ipc_server.saved_state);
+	proc_restore_state(ctx, serv_proc, &serv_proc->space->ipc_server.saved_state, &serv_proc->space->ipc_server.saved_ipc_res);
 	if(serv_proc->info.state == READY || serv_proc->info.state == RUNNING)
 	//if(serv_proc->info.state == READY)
 		proc_ready(serv_proc);
@@ -482,12 +479,13 @@ static void sys_ipc_end(context_t* ctx) {
 	proc_ipc_close(serv_proc, ipc);
 	proc_wakeup(serv_proc->info.pid, -1, (uint32_t)&serv_proc->space->ipc_server); 
 
-	if(proc_ipc_fetch(serv_proc) != 0)  {//fetch next buffered ipc
-		proc_save_state(serv_proc, &serv_proc->space->ipc_server.saved_state);
+	/*if(proc_ipc_fetch(serv_proc) != 0)  {//fetch next buffered ipc
+		proc_save_state(serv_proc, &serv_proc->space->ipc_server.saved_state, &serv_proc->space->ipc_server.saved_ipc_res);
 		serv_proc->space->ipc_server.do_switch = true;
 		proc_ready(serv_proc);
 		//proc_ipc_do_task(ctx, serv_proc, serv_proc->info.core);
 	}
+	*/
 	//else
 	schedule(ctx);
 }
@@ -517,6 +515,17 @@ static int32_t sys_proc_ping(int32_t pid) {
 	return 0;
 }
 
+static void sys_proc_priority(int32_t pid, uint32_t priority) {
+	proc_t* cproc = get_current_proc();
+	if(cproc->info.uid > 0)
+		return;
+
+	proc_t* proc = proc_get(pid);
+	if(proc == NULL)
+		return;
+	proc->info.priority = priority;
+}
+
 static void sys_proc_ready_ping(void) {
 	proc_t* proc = proc_get_proc(get_current_proc());
 	proc->space->ready_ping = true;
@@ -525,7 +534,7 @@ static void sys_proc_ready_ping(void) {
 static void sys_get_kevent(context_t* ctx, kevent_t* kev) {
 	ctx->gpr[0] = -1;
 	if(kev_pop(kev) != 0) {
-		proc_block_on(ctx, -1, (uint32_t)kev_init);
+		//proc_block_on(ctx, -1, (uint32_t)kev_init);
 		return;
 	}
 	ctx->gpr[0] = 0;
@@ -630,9 +639,10 @@ static void sys_interrupt_end(context_t* ctx) {
 }
 
 static inline void sys_soft_int(context_t* ctx, int32_t to_pid, uint32_t entry, uint32_t data) {
+	ctx->gpr[0] = 0;
 	proc_t* proc = proc_get_proc(get_current_proc());
 	if(proc->info.uid > 0)
-		return;
+		ctx->gpr[0] = -2;
 	interrupt_soft_send(ctx, to_pid, entry, data);
 }
 
@@ -643,42 +653,19 @@ static inline int32_t sys_proc_uuid(int32_t pid) {
 	return proc->info.uuid;
 }
 
-static inline void sys_schd_core_lock(void) {
-	proc_t* cproc = get_current_proc();
-	cproc->schd_core_lock_counter = SCHD_CORE_LOCK_LIMIT;
+static inline void sys_mmio_rw(int32_t arg0, int32_t arg1, int32_t arg2, context_t* ctx){
+	uint32_t *reg = (uint32_t *)arg0;
+	uint32_t val = arg1;
+	uint32_t mask = arg2;
+
+	if(reg >= MMIO_BASE && reg < MMIO_BASE + _sys_info.mmio.size){
+		*reg &= ~(mask);
+		*reg |= (val & mask);
+		ctx->gpr[0] = *reg;
+	}
 }
 
-static inline void sys_schd_core_unlock(void) {
-	proc_t* cproc = get_current_proc();
-	cproc->schd_core_lock_counter = 0;
-}
-
-static inline void sys_set_timer_intr_usec(uint32_t usec) {
-	proc_t* cproc = get_current_proc();
-	if(cproc->info.uid > 0)
-		return;
-	_kernel_config.timer_intr_usec = usec;
-}
-
-static inline void sys_root(void) {
-#ifdef KCONSOLE
-	kconsole_close();
-#endif
-}
-
-static int sys_get_trace(int arg0) {
-#ifdef SCHD_TRACE
-	return get_trace((trace_t*)arg0);
-#endif
-}
-
-static int sys_get_trace_fps(void) {
-#ifdef SCHD_TRACE
-	return get_trace_fps();
-#endif
-}
-
-static inline void _svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_t arg2, context_t* ctx) {
+static inline void _svc_handler(int32_t code, ewokos_addr_t arg0, ewokos_addr_t arg1, ewokos_addr_t arg2, context_t* ctx) {
 	_svc_total++;
 	_svc_counter[code]++;
 
@@ -752,8 +739,8 @@ static inline void _svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_
 	case SYS_GET_SYS_STATE:
 		sys_get_sys_state((sys_state_t*)arg0);
 		return;
-	case SYS_GET_KERNEL_TIC:
-		ctx->gpr[0] = sys_get_kernel_tic((uint32_t*)arg0, (uint32_t*)arg1, (uint32_t*)arg2);
+	case SYS_GET_VSYSCALL_INFO:
+		ctx->gpr[0] = (uint32_t)sys_get_vsyscall_info();
 		return;
 	case SYS_GET_PROC: 
 		ctx->gpr[0] = (int32_t)get_proc(arg0, (procinfo_t*)arg1);
@@ -774,22 +761,31 @@ static inline void _svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_
 		ctx->gpr[0] = sys_shm_unmap((void*)arg0);
 		return;
 	case SYS_THREAD:
-		sys_thread(ctx, (uint32_t)arg0, (uint32_t)arg1, arg2);
+		sys_thread(ctx, arg0, arg1, arg2);
 		return;
 	case SYS_KPRINT:
 		sys_kprint((const char*)arg0, arg1);
 		return;
 	case SYS_MEM_MAP:
-		ctx->gpr[0] = sys_mem_map((uint32_t)arg0, (uint32_t)arg1, (uint32_t)arg2);
+		ctx->gpr[0] = sys_mem_map(arg0, arg1, (uint32_t)arg2);
+		return;
+	case SYS_DMA_ALLOC:
+		ctx->gpr[0] = sys_dma_alloc(arg0, (uint32_t)arg1);
+		return;
+	case SYS_DMA_FREE:
+		sys_dma_free(arg0, (uint32_t)arg1);
+		return;
+	case SYS_DMA_SET:
+		ctx->gpr[0] = sys_dma_set((ewokos_addr_t)arg0, (uint32_t)arg1, arg2);
+		return;
+	case SYS_DMA_PHY_ADDR:
+		ctx->gpr[0] = sys_dma_phy(arg0, (ewokos_addr_t)arg1);
 		return;
 	case SYS_IPC_SETUP:
 		sys_ipc_setup(ctx, arg0, arg1, arg2);
 		return;
 	case SYS_IPC_CALL:
 		sys_ipc_call(ctx, arg0, arg1, (proto_t*)arg2);
-		return;
-	case SYS_IPC_GET_RETURN_SIZE:
-		sys_ipc_get_return_size(ctx, arg0, (uint32_t)arg1);
 		return;
 	case SYS_IPC_GET_RETURN:
 		sys_ipc_get_return(ctx, arg0, (uint32_t)arg1, (proto_t*)arg2);
@@ -799,9 +795,6 @@ static inline void _svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_
 		return;
 	case SYS_IPC_END:
 		sys_ipc_end(ctx);
-		return;
-	case SYS_IPC_GET_ARG_SIZE:
-		ctx->gpr[0] = sys_ipc_get_info_size((uint32_t)arg0);
 		return;
 	case SYS_IPC_GET_ARG:
 		ctx->gpr[0] = sys_ipc_get_info((uint32_t)arg0, (int32_t*)arg1, (proto_t*)arg2);
@@ -854,37 +847,22 @@ static inline void _svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_
 	case SYS_SOFT_INT:
 		sys_soft_int(ctx, arg0, arg1, arg2);
 		return;
-	case SYS_PROC_UUID:
-		ctx->gpr[0] = sys_proc_uuid(arg0);
-		return;
 	case SYS_V2P:
 		ctx->gpr[0] = V2P(arg0);
 		return;
 	case SYS_P2V:
 		ctx->gpr[0] = P2V(arg0);
 		return;
-	case SYS_SCHD_CORE_LOCK:	
-		sys_schd_core_lock();
-		return;	
-	case SYS_SCHD_CORE_UNLOCK:	
-		sys_schd_core_unlock();
-		return;	
-	case SYS_SET_TIMER_INTR_USEC:	
-		sys_set_timer_intr_usec(arg0);
-		return;	
-	case SYS_CLOSE_KCONSOLE:	
-		sys_root();
-		return;	
-	case SYS_GET_TRACE:	
-		ctx->gpr[0] = sys_get_trace(arg0);
-		return;	
-	case SYS_GET_TRACE_FPS:	
-		ctx->gpr[0] = sys_get_trace_fps();
+	case SYS_MMIO_RW:
+		sys_mmio_rw(arg0, arg1, arg2, ctx);
+		return;
+	case SYS_PROC_PRIORITY:
+		sys_proc_priority(arg0, (uint32_t)arg1);
 		return;	
 	}
 }
 
-inline void svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_t arg2, context_t* ctx) {
+inline void svc_handler(int32_t code, ewokos_addr_t arg0, ewokos_addr_t arg1, ewokos_addr_t arg2, context_t* ctx) {
 	__irq_disable();
 
 	kernel_lock();

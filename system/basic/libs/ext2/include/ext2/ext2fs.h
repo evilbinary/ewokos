@@ -3,7 +3,7 @@
 
 #include <ext2/ext2head.h>
 
-int32_t ext2_init(ext2_t* ext2, read_block_func_t read_block, write_block_func_t write_block);
+int32_t ext2_init(ext2_t* ext2, read_block_func_t read_block, write_block_func_t write_block, uint32_t buffer_size);
 
 void ext2_quit(ext2_t* ext2);
 
@@ -15,7 +15,7 @@ int32_t ext2_read(ext2_t* ext2, INODE* node, char *buf, int32_t nbytes, int32_t 
 
 int32_t ext2_write(ext2_t* ext2, INODE* node, const char *data, int32_t nbytes, int32_t offset);
 
-uint32_t ext2_ino_by_fname(ext2_t* ext2, const char* fname);
+uint32_t ext2_ino_by_fname(ext2_t* ext2, const char* fname, DIR_T* dirp);
 
 int32_t ext2_node_by_fname(ext2_t* ext2, const char* fname, INODE* node);
 

@@ -29,6 +29,72 @@ int dev_set(int dev_pid, fsinfo_t* info) {
 	return res;
 }
 
+int dev_stat(int dev_pid,  fsinfo_t* info, node_stat_t* stat) {
+	proto_t in, out;
+	PF->init(&out);
+	PF->init(&out);
+	PF->init(&in)->add(&in, info, sizeof(fsinfo_t));
+	int res = ipc_call(dev_pid, FS_CMD_STAT, &in, &out);
+	PF->clear(&in);
+	if(res != 0) {
+		PF->clear(&out);
+		return res;
+	}
+	res = proto_read_int(&out);
+	if(res == 0)
+		proto_read_to(&out, stat, sizeof(node_stat_t));
+
+	PF->clear(&in);
+	PF->clear(&out);
+	return res;
+}
+
+int dev_get_by_name(int dev_pid, const char* fname, fsinfo_t* info) {
+	int res;
+	proto_t in, out;
+	PF->init(&in)->adds(&in, fname);
+	PF->init(&out);
+	res = ipc_call(dev_pid, FS_CMD_GET, &in, &out);
+	PF->clear(&in);
+	if(res == 0) {
+		res = proto_read_int(&out); //res = node
+		if(res == 0) {
+			if(info != NULL){
+				proto_read_to(&out, info, sizeof(fsinfo_t));
+				//fix me: update stat form device
+				//dev_stat(info->mount_pid, info, &info->stat);
+			}
+		}
+		else
+			res = -1;
+	}
+	PF->clear(&out);
+	return res;	
+}
+
+fsinfo_t* dev_kids(int dev_pid, fsinfo_t* info, uint32_t *num) {
+	fsinfo_t* ret = NULL;
+	if(info == NULL)
+		return NULL;
+
+	proto_t in, out;
+	PF->init(&out);
+	PF->format(&in, "i,m",
+		info->node, info, sizeof(fsinfo_t));
+	int res = ipc_call(info->mount_pid, FS_CMD_KIDS, &in, &out);	
+	if(res == 0) {
+		uint32_t n = proto_read_int(&out);
+		*num = n;
+		if(n > 0) {
+			ret = (fsinfo_t*)malloc(n * sizeof(fsinfo_t));
+			proto_read_to(&out, ret, n * sizeof(fsinfo_t));
+		}
+	}
+	PF->clear(&out);
+	PF->clear(&in);
+	return ret;
+}
+
 int dev_unlink(int dev_pid, uint32_t node, const char* fname) {
 	proto_t in, out;
 	PF->init(&out);
@@ -70,12 +136,12 @@ int dev_open(int dev_pid, int fd, fsinfo_t* info, int oflag) {
 	return res;
 }
 
-#define SHM_ON 128
-#define SHM_MAX 4096
+#define SHM_ON  256
+#define SHM_MAX (1024*64)
 int dev_read(int dev_pid, int fd, fsinfo_t* info, int32_t offset, void* buf, uint32_t size) {
 	int32_t shm_id = -1;
 	void* shm = NULL;
-	if(size >= SHM_ON) {
+	if(size > SHM_ON) {
 		if(size > SHM_MAX)
 			size = SHM_MAX;
 		key_t key = (info->node << 16) | getpid(); 
@@ -99,7 +165,7 @@ int dev_read(int dev_pid, int fd, fsinfo_t* info, int32_t offset, void* buf, uin
 			if(shm_id != -1 && shm != NULL)
 				memcpy(buf, shm, rd);
 			else
-				proto_read_to(&out, buf, size);
+				proto_read_to(&out, buf, rd);
 		}
 	}
 	PF->clear(&in);

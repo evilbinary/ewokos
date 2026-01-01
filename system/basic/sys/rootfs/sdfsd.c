@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <bsp/bsp_sd.h>
 
+#define SD_BUFFER_SIZE (1024*1024*16) //16M buffer size
+
 static void set_fsinfo_stat(node_stat_t* stat, INODE* inode) {
 	stat->atime = inode->i_atime;
 	stat->ctime = inode->i_ctime;
@@ -43,7 +45,7 @@ static void add_file(fsinfo_t* node_to, const char* name, INODE* inode, int32_t 
 	f.type = FS_TYPE_FILE;
 	f.data = (uint32_t)ino;
 	set_fsinfo_stat(&f.stat, inode);
-	vfs_new_node(&f, node_to->node, false);
+	vfs_new_node(&f, node_to->node, false, false);
 }
 
 static int add_dir(fsinfo_t* info_to, fsinfo_t* ret, const char* dn, INODE* inode, int ino) {
@@ -52,7 +54,7 @@ static int add_dir(fsinfo_t* info_to, fsinfo_t* ret, const char* dn, INODE* inod
 	ret->type = FS_TYPE_DIR;
 	ret->data = (uint32_t)ino;
 	set_fsinfo_stat(&ret->stat, inode);
-	if(vfs_new_node(ret, info_to->node, false) != 0)
+	if(vfs_new_node(ret, info_to->node, false, false) != 0)
 		return -1;
 	return 0;
 }
@@ -65,7 +67,7 @@ static int32_t add_nodes(ext2_t* ext2, INODE *ip, fsinfo_t* dinfo) {
 
 	for (i=0; i<12; i++){
 		if (ip->i_block[i] != 0){
-			ext2->read_block(ip->i_block[i], buf, 1);
+			ext2->read_block(ip->i_block[i], buf);
 			dp = (DIR_T *)buf;
 			cp = buf;
 
@@ -174,6 +176,94 @@ static int sdext2_set(int from_pid, fsinfo_t* info, void* p) {
 	return 0;
 }
 
+static int sdext2_get(int from_pid, const char* fname, fsinfo_t* info, void* p) {
+	ext2_t* ext2 = (ext2_t*)p;
+	DIR_T dirp;
+	uint32_t ino = ext2_ino_by_fname(ext2, fname, &dirp);
+	if(ino <= 0)
+		return -1;
+
+	INODE inode;
+	if(ext2_node_by_ino(ext2, ino, &inode) != 0)
+		return -1;
+	klog("name: %s, type: %d\n", dirp.name, dirp.file_type);
+
+	memset(info, 0, sizeof(fsinfo_t));
+	strcpy(info->name, dirp.name);
+	if(dirp.file_type == 2)
+		info->type = FS_TYPE_DIR;
+	else if(dirp.file_type == 1)
+		info->type = FS_TYPE_FILE;
+	info->data = (uint32_t)ino;
+	set_fsinfo_stat(&info->stat, &inode);
+	return 0;
+}
+
+static fsinfo_t* sdext2_kids(fsinfo_t* info_dir, uint32_t* num, void* p) {
+	fsinfo_t* ret = NULL;
+	*num = 0;
+	if(info_dir->type != FS_TYPE_DIR)
+		return NULL;
+
+	ext2_t* ext2 = (ext2_t*)p;
+	int32_t ino_dir = (int32_t)info_dir->data;
+	if(ino_dir == 0) ino_dir = 2;
+
+	INODE inode_dir;
+	if(ext2_node_by_ino(ext2, ino_dir, &inode_dir) != 0)
+		return NULL;
+
+	int32_t i; 
+	char c, *cp;
+	DIR_T  *dp;
+	char buf[EXT2_BLOCK_SIZE+1];
+
+	for (i=0; i<12; i++){
+		if (inode_dir.i_block[i] != 0){
+			ext2->read_block(inode_dir.i_block[i], buf);
+			dp = (DIR_T *)buf;
+			cp = buf;
+
+			if(dp->inode == 0)
+				continue;
+
+			while (cp < (buf + EXT2_BLOCK_SIZE)){
+				if(dp->name_len == 0)
+					break;
+
+				c = dp->name[dp->name_len];  // save last byte
+				dp->name[dp->name_len] = 0;   
+
+				if(strcmp(dp->name, ".") != 0 && strcmp(dp->name, "..") != 0 && dp->inode != 0) {
+					int32_t ino = dp->inode;
+					INODE ip_node;
+					if(ext2_node_by_ino(ext2, ino, &ip_node) == 0) {
+						fsinfo_t f;
+						memset(&f, 0, sizeof(fsinfo_t));
+						strcpy(f.name, dp->name);
+						f.data = (uint32_t)ino;
+						if(dp->file_type == 2) //director
+							f.type = FS_TYPE_DIR;
+						else if(dp->file_type == 1) //file
+							f.type = FS_TYPE_FILE;
+						set_fsinfo_stat(&f.stat, &ip_node);
+
+						ret = realloc(ret, sizeof(fsinfo_t) * (*num + 1));
+						memcpy(&ret[*num], &f, sizeof(fsinfo_t));
+						(*num)++;
+						//klog("add file %s\n", dp->name);
+					}
+				}
+				//add node
+				dp->name[dp->name_len] = c; // restore that last byte
+				cp += dp->rec_len;
+				dp = (DIR_T *)cp;
+			}
+		}
+	}
+	return ret;
+}
+
 static int sdext2_read(int fd, int from_pid, fsinfo_t* info, 
 		void* buf, int size, int offset, void* p) {
 	(void)fd;
@@ -237,22 +327,15 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 
-	klog("\n    init sdc ... ");
 	if(bsp_sd_init() != 0) {
-		klog("failed!\n");
 		return -1;
 	}
-	klog("[ok]\n");
 
 	ext2_t ext2;
-	klog("    init ext2 fs ... ");
-	if(ext2_init(&ext2, sd_read, sd_write) != 0) {
+	if(ext2_init(&ext2, sd_read, sd_write, SD_BUFFER_SIZE) != 0) { //max buffer size 16MB
 		sd_quit();
-		klog("failed!\n");
 		return -1;
 	}
-	klog("[ok]\n");
-	sd_set_buffer(ext2.super.s_blocks_count*2);
 
 	vdevice_t dev;
 	memset(&dev, 0, sizeof(vdevice_t));
@@ -263,10 +346,12 @@ int main(int argc, char** argv) {
 	dev.create = sdext2_create;
 	dev.open = sdext2_open;
 	dev.set = sdext2_set;
+	dev.get = sdext2_get;
+	dev.kids = sdext2_kids;
 	dev.unlink = sdext2_unlink;
 	
 	dev.extra_data = &ext2;
-	device_run(&dev, "/", FS_TYPE_DIR, 0771);
+	device_run(&dev, "/", FS_TYPE_DIR, 0777);
 	ext2_quit(&ext2);
 	sd_quit();
 	return 0;

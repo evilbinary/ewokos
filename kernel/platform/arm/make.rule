@@ -1,0 +1,149 @@
+# tools
+AR = arm-none-eabi-ar
+AS = arm-none-eabi-as
+CC = arm-none-eabi-gcc
+CXX = arm-none-eabi-c++
+LD = arm-none-eabi-ld
+OBJCOPY = arm-none-eabi-objcopy
+OBJDUMP = arm-none-eabi-objdump
+
+export QEMU_AUDIO_DRV=none
+
+SRC_DIR=$(EWOKOS_ROOT_DIR)/kernel
+
+ARCH_DIR=$(SRC_DIR)/platform/arm/arch
+BSP_DIR=bsp
+
+BUILD_DIR = .
+
+# flags
+ASFLAGS = $(OPTM) -I. -I$(SRC_DIR)/include -marm $(ARCH_CFLAGS)
+
+ifeq ($(SMP),yes)
+CFLAGS += -DKERNEL_SMP
+ASFLAGS += -DKERNEL_SMP
+endif
+
+ifeq ($(ARCH_VER),v7)
+CFLAGS += -mfpu=neon-vfpv3 -DFPU_ENABLED
+ASFLAGS += -mfpu=neon-vfpv3 -DFPU_ENABLED
+endif
+
+ifeq ($(DEBUG),yes)
+OPTM = -g 
+else
+OPTM = -O2
+endif
+
+CFLAGS += $(OPTM) \
+	-Wno-incompatible-pointer-types \
+	-Wno-int-conversion \
+	-Wno-implicit-function-declaration \
+	-Wno-declaration-missing-parameter-type \
+	-I. -I$(SRC_DIR)/lib/include \
+	-I$(SRC_DIR)/kernel/include \
+	-I$(SRC_DIR)/dev/include \
+	-I$(ARCH_DIR)/$(ARCH_VER) \
+	-I$(ARCH_DIR)/common/include \
+	-marm $(ARCH_CFLAGS) \
+	-Wstrict-prototypes \
+	-pedantic -Wall -Wextra -msoft-float -fPIC -mapcs-frame \
+	-fno-builtin-printf \
+	-fno-builtin-strcpy \
+	-Wno-overlength-strings \
+	-fno-builtin-exit \
+	-fno-builtin-stdio \
+	-fno-builtin-memset \
+	-fno-builtin-memcpy \
+	-fno-builtin-strchr \
+	-fno-builtin-strcmp \
+	-fno-builtin-strlen \
+	-fno-builtin-strncpy \
+	-fno-builtin-strncmp \
+	-std=c99
+
+ARCH_OBJS += \
+	$(ARCH_DIR)/$(ARCH_VER)/boot.o \
+	$(ARCH_DIR)/$(ARCH_VER)/interrupt.o \
+	$(ARCH_DIR)/$(ARCH_VER)/system.o \
+	$(ARCH_DIR)/$(ARCH_VER)/mmu_pte_flags.o \
+	$(ARCH_DIR)/common/src/gic.o \
+	$(ARCH_DIR)/common/src/irq.o \
+	$(ARCH_DIR)/common/src/memcpy.o \
+	$(ARCH_DIR)/common/src/mmu_arch.o \
+	$(ARCH_DIR)/common/src/arm32_aeabi_divmod_a32.o \
+	$(ARCH_DIR)/common/src/arm32_aeabi_divmod.o
+
+ifeq ($(ARCH_VER),v7)
+	ARCH_OBJS += $(ARCH_DIR)/$(ARCH_VER)/neon.o
+endif
+
+LIB_EXT2_DIR=$(SRC_DIR)/lib/ext2
+LIB_EXT2_OBJS = $(LIB_EXT2_DIR)/src/partition.o $(LIB_EXT2_DIR)/src/ext2read.o 
+CFLAGS += -I$(LIB_EXT2_DIR)/include
+
+LIB_SCONF_DIR=$(SRC_DIR)/lib/sconf
+LIB_SCONF_OBJS = $(LIB_SCONF_DIR)/src/sconf.o 
+CFLAGS += -I$(LIB_SCONF_DIR)/include
+
+LIB_DIR = $(SRC_DIR)/lib/src
+LIB_OBJS = \
+	$(LIB_DIR)/kstring.o \
+	$(LIB_DIR)/mstr.o \
+	$(LIB_DIR)/atoi.o \
+	$(LIB_DIR)/vprintf.o \
+	$(LIB_DIR)/proto.o \
+	$(LIB_DIR)/queue.o \
+	$(LIB_DIR)/kprintf.o \
+	$(LIB_EXT2_OBJS) \
+	$(LIB_SCONF_OBJS)
+
+LOAD_DIR=$(SRC_DIR)/loadinit/sd
+LOAD_OBJS = \
+	$(LOAD_DIR)/loadinit.o
+
+DEV_DIR = $(SRC_DIR)/dev/src
+
+CFLAGS += -I$(LOAD_DIR)
+
+KERNEL_DIR = $(SRC_DIR)/kernel/src
+KERNEL_OBJS = \
+	$(KERNEL_DIR)/mm/kalloc.o \
+	$(KERNEL_DIR)/mm/trunkmem.o \
+	$(KERNEL_DIR)/mm/kmalloc.o \
+	$(KERNEL_DIR)/mm/kmalloc_vm.o \
+	$(KERNEL_DIR)/mm/dma.o \
+	$(KERNEL_DIR)/mm/shm.o \
+	$(KERNEL_DIR)/mm/mmu.o \
+	$(KERNEL_DIR)/smp/core.o \
+	$(KERNEL_DIR)/irq.o \
+	$(KERNEL_DIR)/svc.o \
+	$(KERNEL_DIR)/semaphore.o \
+	$(KERNEL_DIR)/proc.o \
+	$(KERNEL_DIR)/ipc.o \
+	$(KERNEL_DIR)/signal.o \
+	$(KERNEL_DIR)/interrupt.o \
+	$(KERNEL_DIR)/schedule.o \
+	$(KERNEL_DIR)/system.o \
+	$(KERNEL_DIR)/kevqueue.o \
+	$(KERNEL_DIR)/kernel_config.o \
+	$(KERNEL_DIR)/hw_info.o \
+	$(KERNEL_DIR)/kernel.o
+
+OBJS = $(ARCH_OBJS) \
+	$(LIB_OBJS) \
+	$(LOAD_OBJS) \
+	$(KERNEL_OBJS) \
+	$(DEV_OBJS) 
+
+LDFLAGS = -L $(ARCH_DIR)/$(ARCH_VER) $(ARCH_LD_FLAGS) 
+
+all: $(OS_IMG) 
+
+$(OS_IMG): $(OBJS) $(LDS)
+	$(LD) $(OBJS) $(LDFLAGS) -T $(LDS) -o $(BUILD_DIR)/$(OS_ELF)
+	$(OBJCOPY) -O binary $(BUILD_DIR)/$(OS_ELF) $(BUILD_DIR)/$(OS_IMG)
+
+clean:
+	rm -f $(OBJS)
+	rm -f $(OS_IMG) $(OS_ELF)

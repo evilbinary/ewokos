@@ -34,6 +34,7 @@ typedef struct {
 	uint32_t           malloc_base;
 	uint32_t           rw_heap_base;
 	uint32_t           heap_size;
+	uint32_t           heap_used;
 	int32_t            refs;
 	bool               ready_ping;
 	
@@ -52,13 +53,13 @@ typedef struct st_proc {
 	procinfo_t        info;
 	bool              is_core_idle_proc;
 
+	uint32_t          priority_count;
 	uint32_t          block_event;
 	uint32_t          ipc_buffered;
 	bool              ipc_buffer_clean;
 	ipc_res_t         ipc_res;
 
 	int64_t           sleep_counter; //sleep usec
-	uint32_t          schd_core_lock_counter; //schd_core_lock usec
 	uint32_t          run_usec_counter; //run time usec
 
 	proc_space_t*     space; //threads share the space from owner proc
@@ -116,6 +117,6 @@ extern void    proc_ready(proc_t* proc);
 extern int32_t proc_childof(proc_t* proc, proc_t* parent);
 
 extern bool    proc_have_ready_task(uint32_t core);
-extern void    proc_save_state(proc_t* proc, saved_state_t* saved_state);
-extern void    proc_restore_state(context_t* ctx, proc_t* proc, saved_state_t* saved_state);
+extern void    proc_save_state(proc_t* proc, saved_state_t* saved_state, ipc_res_t* saved_ipc_res);
+extern void    proc_restore_state(context_t* ctx, proc_t* proc, saved_state_t* saved_state, ipc_res_t* saved_ipc_res);
 #endif

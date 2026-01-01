@@ -10,6 +10,7 @@
 #include <ewoksys/interrupt.h>
 #include <ewoksys/mstr.h>
 #include <ewoksys/kernel_tic.h>
+#include <ewoksys/ipc.h>
 
 typedef struct interrupt_st {
 	uint32_t id;
@@ -51,7 +52,7 @@ static int32_t interrupt_remove(int32_t pid, uint32_t id) {
 static int32_t interrupt_setup(int32_t pid, uint32_t timer_usec, uint32_t entry, uint32_t data) {
 	interrupt_t* intr = (interrupt_t*)malloc(sizeof(interrupt_t));
 	intr->pid = pid;
-	intr->proc_uuid = syscall1(SYS_PROC_UUID, pid);
+	intr->proc_uuid = proc_get_uuid(pid);
 	intr->entry = entry;
 	intr->data = data;
 	intr->timer_usec = timer_usec;
@@ -77,7 +78,6 @@ static void update_timer_intr(void) {
 
 	if(min_usec != _min_timer_usec) {
 		_min_timer_usec = min_usec;
-		syscall1(SYS_SET_TIMER_INTR_USEC, min_usec);
 	}
 }
 
@@ -97,7 +97,7 @@ static void interrupt_handle(uint32_t interrupt, uint32_t data) {
 				intr->timer_last = usec;
 			else if((usec - intr->timer_last) >= intr->timer_usec) {
 				intr->timer_last = usec;
-				syscall3(SYS_SOFT_INT, intr->pid, intr->entry, intr->data);
+				sys_soft_intr(intr->pid, intr->entry, intr->data);
 			}
 			prev = intr;
 		}
@@ -115,14 +115,15 @@ static void interrupt_handle(uint32_t interrupt, uint32_t data) {
 		intr = next;
 	}
 
-	if(_intr_list == NULL)
-		sys_interrupt_setup(IRQ_TIMER0, NULL);
+	//if(_intr_list == NULL)
+		//sys_interrupt_setup(IRQ_TIMER0, NULL);
 
 	//ipc_enable();
 }
 
 static int timer_dcntl(int from_pid, int cmd, proto_t* in, proto_t* ret, void* p) {
 	(void)p;
+	from_pid = proc_getpid(from_pid);
 
 	if(cmd == TIMER_SET) { 
 		//klog("timer set\n");
@@ -130,7 +131,7 @@ static int timer_dcntl(int from_pid, int cmd, proto_t* in, proto_t* ret, void* p
 			static interrupt_handler_t handler;
 			handler.data = 0;
 			handler.handler = interrupt_handle;
-			sys_interrupt_setup(IRQ_TIMER0, &handler);
+			//sys_interrupt_setup(IRQ_TIMER0, &handler);
 		}
 		uint32_t usec = (uint32_t)proto_read_int(in);
 		uint32_t entry = (uint32_t)proto_read_int(in);
@@ -144,8 +145,8 @@ static int timer_dcntl(int from_pid, int cmd, proto_t* in, proto_t* ret, void* p
 		uint32_t id = (uint32_t)proto_read_int(in);
 		interrupt_remove(from_pid, id);
 		update_timer_intr();
-		if(_intr_list == NULL)
-			sys_interrupt_setup(IRQ_TIMER0, NULL);
+		//if(_intr_list == NULL)
+			//sys_interrupt_setup(IRQ_TIMER0, NULL);
 	}
 	return 0;
 }
@@ -171,8 +172,20 @@ static char* timer_cmd(int from_pid, int argc, char** argv, void* p) {
 	return NULL;
 }
 
+static int timer_loop(void* p) {
+	ipc_disable();
+	interrupt_handle(0, 0);
+	ipc_enable();
+
+	if(_min_timer_usec == 0)
+		proc_usleep(100000);
+	else {
+		proc_usleep(_min_timer_usec/2);
+	}
+}
+
 int main(int argc, char** argv) {
-	const char* mnt_point = argc > 1 ? argv[1]: "/dev/timer";
+	const char* mnt_point = "/dev/timer";
 	_intr_list = NULL;
 	_id = 1;
 	_min_timer_usec = 0;
@@ -182,6 +195,7 @@ int main(int argc, char** argv) {
 	strcpy(dev.name, "timer");
 	dev.dev_cntl = timer_dcntl;
 	dev.cmd = timer_cmd;
+	dev.loop_step = timer_loop;
 
 	device_run(&dev, mnt_point, FS_TYPE_CHAR, 0666);
 	return 0;

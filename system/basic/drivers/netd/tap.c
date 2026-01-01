@@ -57,7 +57,7 @@ ether_tap_open(struct net_device *dev)
     tap = PRIV(dev);
     tap->fd = open(tap->name, 0);
     if (tap->fd < 0) {
-        klog("open: %s, dev=%s", strerror(errno), dev->name);
+        slog("open: %s, dev=%s", strerror(errno), dev->name);
         return -1;
     }
  
@@ -168,7 +168,7 @@ ether_tap_init(const char *name, const char *addr)
     dev->ops = &ether_tap_ops;
     tap = memory_alloc(sizeof(*tap));
     if (!tap) {
-        klog("memory_alloc() failure");
+        slog("memory_alloc() failure");
         return NULL;
     }
     strncpy(tap->name, name, sizeof(tap->name)-1);
@@ -182,6 +182,6 @@ ether_tap_init(const char *name, const char *addr)
         return NULL;
     }
     intr_request_irq(tap->irq, ether_tap_isr, NET_IRQ_SHARED, dev->name, dev);
-    klog("ethernet device initialized, dev=%s", dev->name);
+    slog("ethernet device initialized, dev=%s", dev->name);
     return dev;
 }

@@ -141,15 +141,15 @@ tcp_dump(const uint8_t *data, size_t len)
 #ifdef NET_DEBUG
     struct tcp_hdr *hdr;
     hdr = (struct tcp_hdr *)data;
-    klog( "        src: %u\n", ntoh16(hdr->src));
-    klog( "        dst: %u\n", ntoh16(hdr->dst));
-    klog( "        seq: %u\n", ntoh32(hdr->seq));
-    klog( "        ack: %u\n", ntoh32(hdr->ack));
-    klog( "        off: 0x%02x (%d)\n", hdr->off, (hdr->off >> 4) << 2);
-    klog( "        flg: 0x%02x (%s)\n", hdr->flg, tcp_flg_ntoa(hdr->flg));
-    klog( "        wnd: %u\n", ntoh16(hdr->wnd));
-    klog( "        sum: 0x%04x\n", ntoh16(hdr->sum));
-    klog( "         up: %u\n", ntoh16(hdr->up));
+    slog( "        src: %u\n", ntoh16(hdr->src));
+    slog( "        dst: %u\n", ntoh16(hdr->dst));
+    slog( "        seq: %u\n", ntoh32(hdr->seq));
+    slog( "        ack: %u\n", ntoh32(hdr->ack));
+    slog( "        off: 0x%02x (%d)\n", hdr->off, (hdr->off >> 4) << 2);
+    slog( "        flg: 0x%02x (%s)\n", hdr->flg, tcp_flg_ntoa(hdr->flg));
+    slog( "        wnd: %u\n", ntoh16(hdr->wnd));
+    slog( "        sum: 0x%04x\n", ntoh16(hdr->sum));
+    slog( "         up: %u\n", ntoh16(hdr->up));
 #ifdef HEXDUMP
     hexdump(stderr, data, len);
 #endif
@@ -828,9 +828,7 @@ tcp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct 
     seg.wnd = ntoh16(hdr->wnd);
     seg.up = ntoh16(hdr->up);
     mutex_lock(&mutex);
-    debug_flag = 1;
     tcp_segment_arrives(&seg, hdr->flg, (uint8_t *)hdr + hlen, len - hlen, &local, &foreign);
-    debug_flag = 0;
     mutex_unlock(&mutex);
     return;
 }

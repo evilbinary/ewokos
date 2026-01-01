@@ -1,6 +1,7 @@
-include ../../../hardware/$(ARCH)/make.rule
+SYS_DIR=../../..
+include $(SYS_DIR)/platform/$(ARCH)/make.rule
 
-BUILD_DIR = ../../../build
+BUILD_DIR = $(SYS_DIR)/build/$(HW)
 TARGET_DIR = $(BUILD_DIR)
 
 LDFLAGS = -L$(TARGET_DIR)/lib
@@ -12,7 +13,7 @@ LIB_EXT2_OBJS = src/ext2fs.o
 EXT2 = $(TARGET_DIR)/lib/libext2.a
 
 $(EXT2): $(LIB_EXT2_OBJS)
-	$(AR) rT $(EXT2) $(LIB_EXT2_OBJS)
+	$(AR) rcs $(EXT2) $(LIB_EXT2_OBJS)
 	cp -r include/* $(TARGET_DIR)/include
 
 

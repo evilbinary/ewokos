@@ -3,15 +3,8 @@
 
 #include <kernel/context.h>
 #include <syscalls.h>
+#include <ewokos_config.h>
 
-typedef struct {
-	int32_t pid;
-	int32_t code;
-	int32_t arg0;
-	int32_t arg1;
-	int32_t arg2;
-} svc_t;
-
-extern void svc_handler(int32_t code, int32_t arg0, int32_t arg1, int32_t arg2, context_t* ctx);
+extern void svc_handler(int32_t code, ewokos_addr_t arg0, ewokos_addr_t arg1, ewokos_addr_t arg2, context_t* ctx);
 
 #endif

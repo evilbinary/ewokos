@@ -1,6 +1,7 @@
-include ../../../hardware/$(ARCH)/make.rule
+SYS_DIR=../../..
+include $(SYS_DIR)/platform/$(ARCH)/make.rule
 
-BUILD_DIR = ../../../build
+BUILD_DIR = $(SYS_DIR)/build/$(HW)
 TARGET_DIR = $(BUILD_DIR)
 
 LDFLAGS = -L$(TARGET_DIR)/lib
@@ -83,8 +84,8 @@ LIB_EWOKSYS_OBJS =  \
 EWOKSYS = $(TARGET_DIR)/lib/libewoksys.a
 
 $(EWOKSYS): $(LIB_EWOKSYS_OBJS)   $(LIB_EWOKSYS_SYS_OBJS)
-	$(AR) rT $(EWOKSYS) $(LIB_EWOKSYS_OBJS)
-	cp -r ewoksys/include/* include/* $(TARGET_DIR)/include
+	$(AR) rcs $(EWOKSYS) $(LIB_EWOKSYS_OBJS) 
+	cp -r ewoksys/include/* include/* $(TARGET_DIR)/include 
 
 clean:
 	rm -f $(LIB_EWOKSYS_OBJS) $(LIB_EWOKSYS_OBJS)

@@ -1,39 +1,30 @@
 # EwokOS
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/MisaZhu/ewokos)
+[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/MisaZhu/ewokos)](https://github.com/MisaZhu/ewokos/commits/main/)
+[![GitHub License](https://img.shields.io/github/license/MisaZhu/ewokos)](https://github.com/MisaZhu/ewokos/blob/main/LICENSE)
+
 .Author
 
 	Misa.Z misa.zhu@gmail.com
 
 .About
 
-	A microkernel OS for learning operating system. versatilepb / raspi1,2,3 ported well, raspi4 todo....
+	A microkernel OS for learning operating system. virt/ versatilepb / raspi1,2,3,4 ported well, raspi5 todo....
 	-mmu
 	-smp multi-core
+ 	-64bits & 32bits
 	-copy on write
 	-multi processes
 	-multi thread
 	-ipc
 	-virtual fs service(everythig is a file)
-	-very simple ramdisk for initrd
 	-framebuffer device service for graphics
 	-uart device service
 	-SD card
+ 	-USB
 
 .Environment & Tools
-
-	QEMU: 
-		modified qemu file: hw/sd/sd.c and recompile
-		......
-		if(req.arg & ACMD41_ENQUIRY_MASK) { //modified by Misa.Z 
-		/*if (FIELD_EX32(sd->ocr & req.arg, OCR, VDD_VOLTAGE_WINDOW)) {*/
-			/* We accept any voltage.  10000 V is nothing.
-			*
-			* Once we're powered up, we advance straight to ready state
-			* unless it's an enquiry ACMD41 (bits 23:0 == 0).
-			*/
-			sd->state = sd_ready_state;
-		}
-		......
 	
 	risc-v toolchains:
 		https://github.com/riscv-software-src/homebrew-riscv
@@ -78,48 +69,18 @@
 	
 .make rootfs (system/root.ext2)
 	
-	"cd system; make/make full(with xgui)/make extra(with xgui and extra apps"; make sd:
+	"cd system; make basic/make gui(with fbgui)/make(with xgui and extra apps"; make sd:
 	  build EwokOS rootfs apps and sd file system.
 	
 .run by qemu (raspi2)
 	
-	"cd kernel/build/raspi/pi2.3"
+	"cd kernel/build/raspi/pix"
 	"make run":
 	  run EwokOS(username: root, password: (none));
 	"make debug":
 	  run EwokOS at debug server-mode.
 	"make gdb":
 	  debug EwokOS (debug client-mode).
-
-.xmake build system
-
-    "xmake":
-        build kernel && system
-
-    "xmake b xxx":
-        only build package xxx
-        package list:
-           kernel
-           system
-           rootfs
-           ...
-
-    "xmake f -p xxx"
-        switch platform to "xxx", defalut is miyoo
-        platform list:
-            miyoo
-            raspi1
-            raspi2.3
-            raspi4
-            
-      "xmake c"
-         clean project
-
-      "xmake run qemu"
-         run ewokos in qemu
-         
-      "xmake show"
-         show current project infomation      
 
 .commands 
 	

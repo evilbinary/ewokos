@@ -26,6 +26,7 @@ enum {
 enum {
 	FS_CMD_NONE = 0,
 	FS_CMD_OPEN,
+	FS_CMD_STAT,
 	FS_CMD_CREATE,
 	FS_CMD_CLOSE,
 	FS_CMD_READ,
@@ -42,7 +43,9 @@ enum {
 	FS_CMD_INTERRUPT,
 	FS_CMD_DEV_CNTL,
 	FS_CMD_SET,
-	FS_CMD_CMD
+	FS_CMD_GET,
+	FS_CMD_CMD,
+	FS_CMD_KIDS
 };
 
 enum {

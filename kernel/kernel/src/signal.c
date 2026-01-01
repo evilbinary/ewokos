@@ -8,7 +8,7 @@
 #include <mm/mmu.h>
 #include <mm/kalloc.h>
 
-int32_t  proc_signal_setup(uint32_t entry) {
+int32_t  proc_signal_setup(ewokos_addr_t entry) {
 	proc_t* cproc = get_current_proc();
 	cproc->space->signal.entry = entry;
 	return 0;	
@@ -21,7 +21,7 @@ void  proc_signal_send(context_t* ctx, proc_t* proc, int32_t sig_no, bool quick)
 		return;
 	ctx->gpr[0] = 0;
 	
-	proc_save_state(proc, &proc->space->signal.saved_state);
+	proc_save_state(proc, &proc->space->signal.saved_state, &proc->space->signal.saved_ipc_res);
 	proc->space->signal.sig_no = sig_no;
 	proc->space->signal.do_switch = true;
 
@@ -41,7 +41,7 @@ void proc_signal_end(context_t* ctx) {
 		return;
 	}
 
-	proc_restore_state(ctx, cproc, &cproc->space->signal.saved_state);
+	proc_restore_state(ctx, cproc, &cproc->space->signal.saved_state, &cproc->space->signal.saved_ipc_res);
 	if(cproc->space->signal.sig_no == SYS_SIG_STOP ||
 			cproc->space->signal.sig_no == SYS_SIG_KILL) {
 		proc_ready(cproc);

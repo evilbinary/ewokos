@@ -187,9 +187,9 @@ int vfs_get_by_node(uint32_t node, fsinfo_t* info) {
 	return res;
 }
 
-int vfs_new_node(fsinfo_t* info, uint32_t node_to, bool vfs_node_only) {
+int vfs_new_node(fsinfo_t* info, uint32_t node_to, bool vfs_node_only, bool vfs_write_over) {
 	proto_t in, out;
-	PF->format(&in, "m,i,i", info, sizeof(fsinfo_t), node_to, vfs_node_only);
+	PF->format(&in, "m,i,i,i,i", info, sizeof(fsinfo_t), node_to, vfs_node_only, vfs_write_over);
 	PF->init(&out);
 	int res = ipc_call(get_vfsd_pid(), VFS_NEW_NODE, &in, &out);
 	PF->clear(&in);
@@ -204,24 +204,22 @@ int vfs_new_node(fsinfo_t* info, uint32_t node_to, bool vfs_node_only) {
 	return res;	
 }
 
-const char* vfs_fullname(const char* fname) {
-	str_t* fullname = str_new("");
+void vfs_fullname(const char* fname, char* ret, uint32_t len) {
 	if(fname[0] == '/') {
-		str_cpy(fullname, fname);
-	}
-	else {
-		char pwd[FS_FULL_NAME_MAX];
-		getcwd(pwd, FS_FULL_NAME_MAX-1);
-		str_cpy(fullname, pwd);
-		if(pwd[1] != 0)
-			str_addc(fullname, '/');
-		str_add(fullname, fname);
+		strncpy(ret, fname, len);
+		return;
 	}
 
-	static char ret[FS_FULL_NAME_MAX] = {0};
-	strncpy(ret, fullname->cstr, FS_FULL_NAME_MAX-1);
+	str_t* fullname = str_new("");
+	char pwd[FS_FULL_NAME_MAX+1] = {0};
+	getcwd(pwd, FS_FULL_NAME_MAX);
+	str_cpy(fullname, pwd);
+	if(pwd[1] != 0)
+		str_addc(fullname, '/');
+	str_add(fullname, fname);
+
+	strncpy(ret, fullname->cstr, FS_FULL_NAME_MAX);
 	str_free(fullname);
-	return ret;
 }
 
 int vfs_open(fsinfo_t* info, int oflag) {
@@ -234,6 +232,7 @@ int vfs_open(fsinfo_t* info, int oflag) {
 	PF->clear(&in);
 	if(res == 0) {
 		res = proto_read_int(&out);
+		//klog("vfs_open: %s, fd: %d, oflag: %d, mount_pid: %d\n", info->name, res, oflag, info->mount_pid);
 		if(res >= 0) {
 			proto_read_to(&out, info, sizeof(fsinfo_t));
 			fsfile_t* file = vfs_set_file(res, info);	
@@ -305,6 +304,12 @@ int vfs_close(int fd) {
 		if(vfs_update(&file->info, true) != 0)
 			return -1;
 	}
+
+	proto_t in;
+	PF->format(&in, "i,i,m",
+		fd, file->info.node, &file->info, sizeof(fsinfo_t));
+	int res = ipc_call(file->info.mount_pid, FS_CMD_CLOSE, &in, NULL);	
+	PF->clear(&in);
 
 	vfs_clear_file(fd);	
 	return vfs_close_info(fd);
@@ -380,18 +385,80 @@ int vfs_open_pipe(int fd[2]) {
 	return res;
 }
 
-int vfs_get_by_name(const char* fname, fsinfo_t* info) {
-	fname = vfs_fullname(fname);
+int vfs_get_mount_by_id(int id, mount_t* mount) {
 	proto_t in, out;
-	PF->init(&in)->adds(&in, fname);
+	PF->init(&in)->addi(&in, id);
 	PF->init(&out);
-	int res = ipc_call(get_vfsd_pid(), VFS_GET_BY_NAME, &in, &out);
+	int res = ipc_call(get_vfsd_pid(), VFS_GET_MOUNT_BY_ID, &in, &out);
+	PF->clear(&in);
+
+	if(res == 0) {
+		res = proto_read_int(&out);
+		if(res == 0)
+			proto_read_to(&out, mount, sizeof(mount_t));
+	}
+	PF->clear(&out);
+	return res;
+}
+
+int vfs_get_mount_by_fname(const char* fname, mount_t* mount, char* dev_fname, int dev_fname_sz) {
+	int max_len = 0;
+	for(int i=0; i<FS_MOUNT_MAX; i++) {
+		mount_t mnt;
+		if(vfs_get_mount_by_id(i, &mnt) != 0)
+			continue;
+		const char* p = strstr(fname, mnt.org_name);
+		if(p != NULL) {
+			if(strlen(mnt.org_name) > max_len) {
+				max_len = strlen(mnt.org_name);
+				memset(dev_fname, 0, dev_fname_sz);
+				memcpy(dev_fname, p + strlen(mnt.org_name) - 1, dev_fname_sz-1);
+				if(dev_fname[0] == 0)
+					dev_fname[0] = '//';
+				memcpy(mount, &mnt, sizeof(mount_t));
+			}
+		}
+	}
+	if(max_len > 0)
+		return 0;
+
+	memset(mount, 0, sizeof(mount_t));
+	return -1;
+}
+
+int vfs_get_by_name(const char* fname, fsinfo_t* info) {
+	int res;
+	char fullname[FS_FULL_NAME_MAX+1] = {0};
+	char dev_fname[FS_FULL_NAME_MAX+1] = {0};
+	vfs_fullname(fname, fullname, FS_FULL_NAME_MAX);
+
+	/* //read from mounted dev
+	mount_t mnt;
+	res = vfs_get_mount_by_fname(fullname, &mnt, dev_fname, FS_FULL_NAME_MAX);
+	if(res == 0) {
+		res = dev_get_by_name(mnt.pid, dev_fname, info);
+		if(res == 0) {
+			info->mount_pid = mnt.pid;
+			klog("mnt: %d, fs_get_by_name: %s, mnt_point: %s, dev_fname: %s\n",
+					info->mount_pid, fullname, mnt.org_name, dev_fname);
+			return 0;
+		}
+	}
+		*/
+
+	proto_t in, out;
+	PF->init(&in)->adds(&in, fullname);
+	PF->init(&out);
+	res = ipc_call(get_vfsd_pid(), VFS_GET_BY_NAME, &in, &out);
 	PF->clear(&in);
 	if(res == 0) {
 		res = proto_read_int(&out); //res = node
 		if(res != 0) {
-			if(info != NULL)
+			if(info != NULL){
 				proto_read_to(&out, info, sizeof(fsinfo_t));
+				//fix me: update stat form device
+				dev_stat(info->mount_pid, info, &info->stat);
+			}
 			res = 0;
 		}
 		else
@@ -401,14 +468,22 @@ int vfs_get_by_name(const char* fname, fsinfo_t* info) {
 	return res;	
 }
 
-fsinfo_t* vfs_kids(uint32_t node, uint32_t *num) {
+fsinfo_t* vfs_kids(fsinfo_t* info, uint32_t *num) {
+	fsinfo_t* ret = NULL;
+
+	/* //read from mounted dev
+	if(info->mount_pid > 0)
+		ret = dev_kids(info->mount_pid, info, num);
+	if(ret != NULL) 
+		return ret;
+		*/
+
 	proto_t in, out;
-	PF->init(&in)->addi(&in, node);
+	PF->init(&in)->addi(&in, info->node);
 	PF->init(&out);
 	int res = ipc_call(get_vfsd_pid(), VFS_GET_KIDS, &in, &out);
 	PF->clear(&in);
 
-	fsinfo_t* ret = NULL;
 	if(res == 0) {
 		uint32_t n = proto_read_int(&out);
 		*num = n;
@@ -463,21 +538,6 @@ int vfs_get_mount(fsinfo_t* info, mount_t* mount) {
 }
 */
 
-int vfs_get_mount_by_id(int id, mount_t* mount) {
-	proto_t in, out;
-	PF->init(&in)->addi(&in, id);
-	PF->init(&out);
-	int res = ipc_call(get_vfsd_pid(), VFS_GET_MOUNT_BY_ID, &in, &out);
-	PF->clear(&in);
-
-	if(res == 0) {
-		res = proto_read_int(&out);
-		if(res == 0)
-			proto_read_to(&out, mount, sizeof(mount_t));
-	}
-	PF->clear(&out);
-	return res;
-}
 
 int vfs_mount(uint32_t mount_node_to, uint32_t node) {
 	proto_t in, out;
@@ -526,21 +586,22 @@ int vfs_seek(int fd, int offset) {
 }
 
 void* vfs_readfile(const char* fname, int* rsz) {
-	fname = vfs_fullname(fname);
+	char fullname[FS_FULL_NAME_MAX+1] = {0};
+	vfs_fullname(fname, fullname, FS_FULL_NAME_MAX);
 	fsinfo_t info;
-	if(vfs_get_by_name(fname, &info) != 0 || info.stat.size <= 0)
+	if(vfs_get_by_name(fullname, &info) != 0 || info.stat.size <= 0)
 		return NULL;
 	void* buf = malloc(info.stat.size+1); //one more char for string end.
 	if(buf == NULL)
 		return NULL;
 
 	char* p = (char*)buf;
-	int fd = open(fname, O_RDONLY);
+	int fd = open(fullname, O_RDONLY);
 	int fsize = info.stat.size;
 	if(fd >= 0) {
 		while(fsize > 0) {
 			int sz = read(fd, p, VFS_BUF_SIZE < fsize ? VFS_BUF_SIZE:fsize);
-			if(sz < 0 && errno != EAGAIN)
+			if(sz <= 0 && errno != EAGAIN)
 				break;
 			if(sz > 0) {
 				fsize -= sz;
@@ -561,28 +622,27 @@ void* vfs_readfile(const char* fname, int* rsz) {
 }
 
 int vfs_create(const char* fname, fsinfo_t* ret, int type, int mode, bool vfs_node_only, bool autodir) {
-	str_t *dir = str_new("");
-	str_t *name = str_new("");
-	vfs_parse_name(fname, dir, name);
+	char dir[FS_FULL_NAME_MAX];
+	char name[FS_FULL_NAME_MAX];
+	vfs_dir_name(fname, dir, FS_FULL_NAME_MAX);
+	vfs_file_name(fname, name, FS_FULL_NAME_MAX);
 
 	fsinfo_t info_to;
-	if(vfs_get_by_name(CS(dir), &info_to) != 0) {
+	if(vfs_get_by_name(dir, &info_to) != 0) {
 		int res_dir = -1;
 		if(autodir)
-			res_dir = vfs_create(CS(dir), &info_to, FS_TYPE_DIR, 0755, vfs_node_only, autodir);
-		if(res_dir != 0) {
-			str_free(dir);
-			str_free(name);
+			res_dir = vfs_create(dir, &info_to, FS_TYPE_DIR, 0755, vfs_node_only, autodir);
+		if(res_dir != 0)
 			return -1;
-		}
 	}
+
+	if(name == NULL || name[0] == 0)
+		return 0;
 
 	fsinfo_t fi;
 	memset(&fi, 0, sizeof(fsinfo_t));
-	strcpy(fi.name, CS(name));
+	strcpy(fi.name, name);
 	fi.type = type;
-	str_free(name);
-	str_free(dir);
 	if(type == FS_TYPE_DIR)
 		fi.stat.size = 1024;
 
@@ -590,7 +650,7 @@ int vfs_create(const char* fname, fsinfo_t* ret, int type, int mode, bool vfs_no
 	fi.stat.gid = getgid();
 	fi.stat.mode = mode;
 
-	if(vfs_new_node(&fi, info_to.node, vfs_node_only) != 0)
+	if(vfs_new_node(&fi, info_to.node, vfs_node_only, false) != 0)
 		return -1;
 
 	if(vfs_node_only) {//only create in vfs service, not existed in storage. 
@@ -614,23 +674,35 @@ int vfs_create(const char* fname, fsinfo_t* ret, int type, int mode, bool vfs_no
 	return res;
 }
 
-int vfs_parse_name(const char* fname, str_t* dir, str_t* name) {
-	str_t* fullstr = str_new(vfs_fullname(fname));
-	char* full = (char*)CS(fullstr);
-	int i = strlen(full);
+const char* vfs_dir_name(const char* fname, char* ret, uint32_t len) {
+	memset(ret, 0, len);
+	strncpy(ret, fname, len-1);
+	int i = strlen(ret)-1;
 	while(i >= 0) {
-		if(full[i] == '/') {
-			full[i] = 0;
+		if(ret[i] == '/') {
+			ret[i] = 0;
 			break;
 		}
 		--i;	
 	}
-	str_cpy(dir, full);
-	str_cpy(name, full+i+1);
-	if(CS(dir)[0] == 0)
-		str_cpy(dir, "/");
-	str_free(fullstr);
-	return 0;
+
+	if(ret[0] == 0)
+		strcpy(ret, "/");
+	return ret;
+}
+
+const char* vfs_file_name(const char* fname, char* ret, uint32_t len) {
+	memset(ret, 0, len);
+	int i = strlen(fname)-1;
+	while(i >= 0) {
+		if(fname[i] == '/') {
+			break;
+		}
+		--i;	
+	}
+	++i;
+	strncpy(ret, fname+i, len-1);
+	return ret;
 }
 
 int vfs_fcntl(int fd, int cmd, proto_t* arg_in, proto_t* arg_out) {
@@ -678,7 +750,6 @@ int vfs_read_pipe(int fd, uint32_t node, void* buf, uint32_t size, bool block) {
 	return 0; //res < 0 , pipe closed, return 0.
 }
 
-#define SHM_ON 128
 int vfs_read(int fd, fsinfo_t *info, void* buf, uint32_t size) {
 	errno = 0;
 	int offset = 0;

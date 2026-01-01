@@ -252,7 +252,7 @@ static void dhcp_discovery(struct net_device *dev){
     dhcp_t *dhcp;
     const uint8_t boardcast[] =  {0xff,0xff, 0xff, 0xff, 0xff, 0xff};
 
-    //klog("DHCP: Send discover\n");
+    //slog("DHCP: Send discover\n");
 
     ip_header = (struct ip_hdr *)(packet);
     udp_header = (struct udp_hdr *)(((char *)ip_header) + sizeof(struct ip_hdr));
@@ -293,7 +293,9 @@ static void dhcp_input(const uint8_t *data, size_t len, struct net_device *dev)
     dhc->ip  = dhcp->yiaddr;
     char buf[16];
     ip_addr_ntop(dhc->ip, buf, sizeof(buf) );
-    klog("DHCP: %s\n", buf);
+    slog("DHCP IP: %s\n", buf);
+    ip_addr_ntop(dhc->gateway, buf, sizeof(buf) );
+    slog("DHCP GATEWAY: %s\n", buf);
 
     /* Parse dhcp option*/
     uint8_t *option  = dhcp->bp_options;

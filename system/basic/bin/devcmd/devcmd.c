@@ -1,9 +1,13 @@
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <ewoksys/vdevice.h>
 #include <ewoksys/keydef.h>
 #include <ewoksys/mstr.h>
 #include <ewoksys/proc.h>
+
+void putch(int c);
 
 int32_t cmd_gets(int fd, str_t* buf) {
 	str_reset(buf);	
@@ -65,6 +69,8 @@ int devcmd(const char* dev_name) {
 	while(true) {
 		prompt(dev_name);
 		cmd_gets(0, cmd);
+		if(cmd->len == 0 || strcmp(cmd->cstr, "\n") == 0)
+			continue;
 		if(strcmp(cmd->cstr, "exit") == 0)
 			break;
 

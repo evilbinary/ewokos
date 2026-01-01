@@ -7,10 +7,11 @@
 #include <kernel/kernel.h>
 #include <stddef.h>
 #include <kstring.h>
+#include <dev/timer.h>
 
 #define IPC_BUFFER_SIZE 32
 
-int32_t proc_ipc_setup(context_t* ctx, uint32_t entry, uint32_t extra_data, uint32_t flags) {
+int32_t proc_ipc_setup(context_t* ctx, ewokos_addr_t entry, ewokos_addr_t extra_data, uint32_t flags) {
 	(void)ctx;
 	proc_t* cproc = get_current_proc();
 	cproc->space->ipc_server.entry = entry;
@@ -19,9 +20,15 @@ int32_t proc_ipc_setup(context_t* ctx, uint32_t entry, uint32_t extra_data, uint
 	return 0;
 }
 
+inline ipc_task_t* proc_ipc_get_task(struct st_proc* serv_proc) {
+	if(serv_proc->space->ipc_server.ctask.state == IPC_IDLE)
+		return NULL;
+	return &(serv_proc->space->ipc_server.ctask);
+}
+
 uint32_t proc_ipc_fetch(struct st_proc* serv_proc) {
 	ipc_task_t* ipc = NULL;
-	while(true) {
+	/*while(true) {
 		ipc = (ipc_task_t*)queue_pop(&serv_proc->space->ipc_server.tasks);
 		if(ipc == NULL) 
 			return 0;
@@ -40,13 +47,12 @@ uint32_t proc_ipc_fetch(struct st_proc* serv_proc) {
 		}
 		kfree(ipc); //drop unvailable ipc
 	}
+	*/
 
-	serv_proc->space->ipc_server.ctask = ipc;
+	ipc = proc_ipc_get_task(serv_proc);
+	if(ipc == NULL)
+		return 0;
 	return ipc->uid;
-}
- 
-inline ipc_task_t* proc_ipc_get_task(struct st_proc* serv_proc) {
-	return serv_proc->space->ipc_server.ctask;
 }
 
 int32_t proc_ipc_do_task(context_t* ctx, proc_t* serv_proc, uint32_t core) {
@@ -57,7 +63,7 @@ int32_t proc_ipc_do_task(context_t* ctx, proc_t* serv_proc, uint32_t core) {
 		return -1;
 	}
 
-	proc_save_state(serv_proc, &serv_proc->space->ipc_server.saved_state);
+	proc_save_state(serv_proc, &serv_proc->space->ipc_server.saved_state, &serv_proc->space->ipc_server.saved_ipc_res);
 	serv_proc->space->ipc_server.do_switch = true;
 
 	if((ipc->call_id & IPC_LAZY) == 0)
@@ -66,11 +72,31 @@ int32_t proc_ipc_do_task(context_t* ctx, proc_t* serv_proc, uint32_t core) {
 }
 
 static void ipc_free(ipc_task_t* ipc) {
-	proto_clear(&ipc->data);
-	kfree(ipc);
+	if(ipc == NULL)
+		return;
+	proto_clear(&ipc->arg_ret);
+	memset(ipc, 0, sizeof(ipc_task_t));
+	//kfree(ipc);
 }
 
-ipc_task_t* proc_ipc_req(proc_t* serv_proc, proc_t* client_proc, int32_t call_id, proto_t* data) {
+ipc_task_t* proc_ipc_req(proc_t* serv_proc, proc_t* client_proc, int32_t call_id, proto_t* arg) {
+	uint64_t usec = timer_read_sys_usec();
+	ipc_task_t* ipc = &serv_proc->space->ipc_server.ctask;
+	//kprintf("ipc timeout check %d\n", usec);
+	if(ipc->state != IPC_IDLE) {
+		return NULL;
+		/*if((usec - ipc->usec) < IPC_TIMEOUT_USEC || (ipc->call_id & IPC_NON_RETURN) == 0)
+			return NULL;
+
+		kprintf("ipc timeout check %d, c: %d, s: %d, call: %d\n", (uint32_t)(usec-ipc->usec), ipc->client_pid, serv_proc->info.pid, ipc->call_id);
+		if(ipc->arg_shm_id > 0) {
+			kprintf("ipc timeout c: %d, s: %d, call: %d\n", ipc->client_pid, serv_proc->info.pid, ipc->call_id);
+			shm_proc_unmap_by_id(serv_proc, ipc->arg_shm_id, true);
+			proc_wakeup(serv_proc->info.pid, client_proc->info.pid, (uint32_t)&client_proc->ipc_res);
+		}
+		*/
+	}
+	/*
 	if(client_proc->ipc_buffer_clean) //cleaning task still on
 		return NULL;
 
@@ -80,47 +106,50 @@ ipc_task_t* proc_ipc_req(proc_t* serv_proc, proc_t* client_proc, int32_t call_id
 		return NULL;
 	}
 
-	_ipc_uid++;
 	ipc_task_t* ipc  = (ipc_task_t*)kmalloc(sizeof(ipc_task_t));
 	if(ipc == NULL)
 		return NULL;
-
+	*/
+	_ipc_uid++;
 	memset(ipc, 0, sizeof(ipc_task_t));
-	proto_init(&ipc->data);
 	ipc->uid = _ipc_uid;
 	ipc->state = IPC_BUSY;
 	ipc->client_pid = client_proc->info.pid;
 	ipc->client_uuid = client_proc->info.uuid;
 	ipc->call_id = call_id;
-	if(data != NULL) {
-		proto_copy(&ipc->data, data->data, data->size); 
+	ipc->usec = usec;
+	if(arg != NULL && arg->data != NULL) {
+		proto_copy(&ipc->arg_ret, arg->data, arg->size);
 	}
 
+	/*
 	if(serv_proc->space->ipc_server.ctask == NULL) 
 		serv_proc->space->ipc_server.ctask = ipc; //set current task
 	else  {
 		queue_push(&serv_proc->space->ipc_server.tasks, ipc); // buffered
 		client_proc->ipc_buffered++;
 	}
+	*/
 	return ipc; 
 }
 
 void proc_ipc_close(proc_t* serv_proc, ipc_task_t* ipc) {
-	(void)serv_proc;
 	if(ipc == NULL)
 		return;
 
-	if(serv_proc->space->ipc_server.ctask == ipc)
+	/*if(serv_proc->space->ipc_server.ctask == ipc)
 		serv_proc->space->ipc_server.ctask = NULL;
+	*/
 	ipc_free(ipc);
 }
 
 void proc_ipc_clear(proc_t* serv_proc) {
-	proc_ipc_close(serv_proc, serv_proc->space->ipc_server.ctask);
-	while(true) {
+	proc_ipc_close(serv_proc, &serv_proc->space->ipc_server.ctask);
+	/*while(true) {
 		ipc_task_t* ipc = (ipc_task_t*)queue_pop(&serv_proc->space->ipc_server.tasks);
 		if(ipc == NULL)
 			break;
 		ipc_free(ipc);
 	}
+	*/
 }

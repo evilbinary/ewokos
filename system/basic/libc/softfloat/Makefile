@@ -33,9 +33,10 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 #=============================================================================
-include ../../../hardware/$(ARCH)/make.rule
+SYS_DIR=../../..
+include $(SYS_DIR)/platform/$(ARCH)/make.rule
 
-BUILD_DIR = ../../../build
+BUILD_DIR = $(SYS_DIR)/build/$(HW)
 TARGET_DIR = $(BUILD_DIR)
 
 SOURCE_DIR ?= source

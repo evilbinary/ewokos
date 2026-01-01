@@ -84,16 +84,16 @@ static void int2str(int val, char* buf){
 static void kout(const char *str) {
 #if IO_DEBUG
 	int len = _strlen(str);
-    syscall2(SYS_KPRINT, (int32_t)str, len);
+    syscall2(SYS_KPRINT, (ewokos_addr_t)str, (ewokos_addr_t)len);
 	if(str[len-1]!='\n')
-		syscall2(SYS_KPRINT, "\n", 1);	
+		syscall2(SYS_KPRINT, (ewokos_addr_t)"\n", 1);	
 #endif
 }
 
 static void kout_str(const char *str) {
 #if IO_DEBUG
 	int len = _strlen(str);
-    syscall2(SYS_KPRINT, (int32_t)str, len);
+    syscall2(SYS_KPRINT, (ewokos_addr_t)str, (ewokos_addr_t)len);
 #endif
 }
 
@@ -396,7 +396,7 @@ _close (int fd)
 {
 	fsinfo_t info;
 	if(vfs_get_by_fd(fd, &info) != 0)
-		return;
+		return -1;
 
 	int ret = vfs_close(fd);
 	return ret;
@@ -418,7 +418,7 @@ _sbrk (ptrdiff_t incr)
   char *prev_heap_end;
 
   __heap_size += incr;
-  __heap_ptr = syscall1(SYS_MALLOC_EXPAND, incr);
+  __heap_ptr = proc_malloc_expand(incr);
   if(incr > 0)
   	memset(__heap_end, 0, incr);
 
@@ -433,7 +433,7 @@ _sbrk (ptrdiff_t incr)
 
 void _libc_init(void){
 	kout(__func__);	
-	__heap_ptr = syscall1(SYS_MALLOC_EXPAND, 16384);
+	__heap_ptr = proc_malloc_expand(16384);
 	__heap_end = __heap_ptr;
 	__heap_size = 16384;	
 	memset(__heap_ptr, 0, __heap_size);
@@ -620,111 +620,27 @@ void __malloc_close(void){
 }
 
 void _kill(int pid, int sig){
-	return syscall2(SYS_SIGNAL, pid, sig);
+	syscall2(SYS_SIGNAL, (ewokos_addr_t)pid, (ewokos_addr_t)sig);
 }
 
 void _fini(void){
   kout(__func__);
 }
 
-static int _ewok_set_env(const char* name, const char* value) {
-	kout(__func__);
-	proto_t in, out;
-	PF->init(&out);
-	PF->init(&in)->adds(&in, name)->adds(&in, value);
-
-	int res = ipc_call(get_cored_pid(), CORE_CMD_SET_ENV, &in, &out);
-	PF->clear(&in);
-	if(res == 0) {
-		if(proto_read_int(&out) != 0) {
-			res = -1;
-		}
-	}
-	else {
-		res = -1;
-	}
-	PF->clear(&out);
-	return res;
-}
-
-
-static void saveenv() {
-	char buf[256] = {0};
-	char ** env;
-	extern char ** environ;
-	env = environ;
-	for (env; *env; ++env) {
-		memset(buf, 0, sizeof(buf));
-		char* key = buf;
-		char* value = buf;
-		for(int i= 0;i < sizeof(buf)-1; i++){
-			char c = (*env)[i];
-			if(c == '\0'){
-				break;
-			}
-			else if(c == '='){
-				buf[i] = '\0';
-				value = &buf[i+1];
-			}else{
-				buf[i] = c;
-			}
-		}
-		if(key[0] != 0){
-			_ewok_set_env(key, value);
-		}
-  }
-}
-
 int
 _execve(const char *name, char *const argv[], char *const env[])
 {
-
-	char fpath[64];
-	int sz = 0;
-	const char *p = name;
-	saveenv();
-	memset(fpath, 0, sizeof(fpath));
-	for(int i = 0; i < sizeof(fpath); i++){
-		if(name[i] == '\0' || name[i] == ' ' || name[i] == '\t' || name[i] == '\n')
-			break;
-		fpath[i] = name[i];
-	}
-	void* buf = vfs_readfile(fpath, &sz);
-
-	if(buf == NULL) {
-		kout_str("read error!\n");
-		return -1;
-	}
-	proc_exec_elf(name, buf, sz);
-	free(buf);
-	return 0;
+	return proc_exec(name);
 }
 
 int execl(const char *name, const char* arg0, ...) {
-	char fpath[64];
-	int sz = 0;
-	const char *p = name;
-	saveenv();
-	memset(fpath, 0, sizeof(fpath));
-	for(int i = 0; i < sizeof(fpath); i++){
-		if(name[i] == '\0' || name[i] == ' ' || name[i] == '\t' || name[i] == '\n')
-			break;
-		fpath[i] = name[i];
-	}
-	void* buf = vfs_readfile(fpath, &sz);
-
-	if(buf == NULL) {
-		return -1;
-	}
-	proc_exec_elf(name, buf, sz);
-	free(buf);
-	return 0;
+	return proc_exec(name);
 }
 
 int _fork()
 {
   	kout(__func__);
-	return syscall0(SYS_FORK);
+	return proc_fork();
 }
 
 int _wait(int *status)
@@ -739,3 +655,34 @@ void __aeabi_unwind_cpp_pr0(void) {
 
 void __aeabi_unwind_cpp_pr1(void) {
 }
+
+#if __aarch64__
+double __trunctfdf2(_Float128 x) {
+    return (double)x;
+}
+
+float __trunctfsf2(_Float128 a) {
+	return (float)a;
+}
+
+_Float128 __extenddftf2(double a) {
+    return (_Float128)a;
+}
+
+_Float128 __extendsftf2(float a) {
+    return (_Float128)a;
+}
+
+_Float128 __addtf3(_Float128 a, _Float128 b) {
+	return a + b;
+}
+
+
+int access(const char *path, int mode){
+	fsinfo_t info;
+	if(vfs_get_by_name(path, &info) != 0)
+		return -1;
+	return vfs_check_access(getpid(), &info, mode);
+}
+
+#endif

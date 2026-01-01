@@ -18,7 +18,7 @@
 extern "C" {
 #endif
 
-static map_t*  _files_hash = NULL;
+static map_t  _files_hash = NULL;
 
 static void device_init(vdevice_t* dev) {
 	_files_hash = hashmap_new();
@@ -115,18 +115,14 @@ static void do_open(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, voi
 static void do_close(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
 	//all close ipc are from vfsd proc, so read owner pid for real owner.
 	(void)out;
-	if(from_pid != get_vfsd_pid())
-		return;
-
 	int fd = proto_read_int(in);
 	uint32_t node = (uint32_t)proto_read_int(in);
-	bool last_ref = (bool)proto_read_int(in);
-	int owner_pid = proto_read_int(in);
+	fsinfo_t* fsinfo = proto_read(in, NULL);
 
 	if(dev != NULL && dev->close != NULL) {
-		dev->close(fd, owner_pid, node, last_ref, p);
+		dev->close(fd, from_pid, node, fsinfo, p);
 	}
-	file_del(fd, owner_pid, node);
+	file_del(fd, from_pid, node);
 }
 
 #define READ_BUF_SIZE 32
@@ -429,6 +425,56 @@ static void do_set(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void
 	PF->addi(out, res);
 }
 
+static void do_get(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
+	fsinfo_t info;
+	const char* fname = proto_read_str(in);
+
+	int res = -1;
+	if(dev != NULL && dev->get != NULL)
+		res = dev->get(from_pid, fname, &info, p);
+	if(res == 0)
+		PF->addi(out, res)->add(out, &info, sizeof(fsinfo_t));
+	else
+		PF->addi(out, res);
+}
+
+static void do_kids(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
+	(void)from_pid;
+	uint32_t node = proto_read_int(in);
+	fsinfo_t info;
+	proto_read_to(in, &info, sizeof(fsinfo_t));
+	klog("dev_kids: %d, 0x%x\n", info.node, info.stat.mode);
+
+	if(vfs_check_access(from_pid, &info, R_OK) != 0) {
+		klog("error dev_kids: %d\n", info.node);
+		PF->addi(out, -1)->addi(out, EPERM);
+		return;
+	}
+
+	fsinfo_t* kids = NULL;
+	uint32_t num;
+	if(dev != NULL && dev->kids != NULL)
+		kids = dev->kids(&info, &num, p);
+	if(kids == NULL || num == 0)
+		return;
+	PF->clear(out)->addi(out, num)->add(out, kids, sizeof(fsinfo_t)*num);
+}
+
+static void do_stat(vdevice_t* dev, int from_pid, proto_t *in, proto_t* out, void* p) {
+	fsinfo_t info;
+	proto_read_to(in, &info, sizeof(fsinfo_t));
+
+	node_stat_t stat;
+
+	if(dev != NULL && dev->stat != NULL) {
+		int ret = dev->stat(from_pid, &info, &stat, p);
+		PF->addi(out, ret);
+		PF->add(out, &stat, sizeof(node_stat_t));
+	}else{
+		PF->addi(out, -1);
+	}
+}
+
 static char* read_cmd_arg(char* cmd, int* offset) {
 	char* p = NULL;
 	uint8_t quotes = 0;
@@ -565,6 +611,9 @@ static void handle(int from_pid, int cmd, proto_t* in, proto_t* out, void* p) {
 	case FS_CMD_OPEN:
 		do_open(dev, from_pid, in, out, p);
 		break;
+	case FS_CMD_STAT:
+		do_stat(dev, from_pid, in, out, p);
+		break;
 	case FS_CMD_CLOSE:
 		do_close(dev, from_pid, in, out, p);
 		break;
@@ -598,6 +647,12 @@ static void handle(int from_pid, int cmd, proto_t* in, proto_t* out, void* p) {
 	case FS_CMD_SET:
 		do_set(dev, from_pid, in, out, p);
 		break;
+	case FS_CMD_GET:
+		do_get(dev, from_pid, in, out, p);
+		break;
+	case FS_CMD_KIDS:
+		do_kids(dev, from_pid, in, out, p);
+		break;
 	case FS_CMD_CMD:
 		do_cmd(dev, from_pid, in, out, p);
 		break;
@@ -625,7 +680,7 @@ static int do_mount(vdevice_t* dev, fsinfo_t* mnt_point, int type, int mode) {
 	info.stat.uid = getuid();
 	info.stat.gid = getgid();
 	info.stat.mode = mode;
-	vfs_new_node(&info, 0, true); // 0 means no father node
+	vfs_new_node(&info, 0, true, false); // 0 means no father node
 
 	if(dev->mount != NULL) { //do device mount precess
 		if(dev->mount(&info, dev->extra_data) != 0) {
@@ -649,6 +704,15 @@ static void sig_stop(int sig_no, void* p) {
   dev->terminated = true;
 }
 
+void device_stop(vdevice_t* dev) {
+	if(dev == NULL)
+		return;
+
+	dev->terminated = true;
+	if(dev->loop_step == NULL)
+		proc_wakeup((uint32_t)dev);
+}
+
 int device_run(vdevice_t* dev, const char* mnt_point, int mnt_type, int mode) {
 	if(dev == NULL)
 		return -1;
@@ -669,8 +733,8 @@ int device_run(vdevice_t* dev, const char* mnt_point, int mnt_type, int mode) {
 
 	int ipc_flags = 0;
 
-	if(dev->loop_step != NULL) 
-		ipc_flags |= IPC_NON_BLOCK;
+	//if(dev->loop_step != NULL) 
+	ipc_flags |= IPC_NON_BLOCK;
 	ipc_serv_run(handle, dev->handled, dev, ipc_flags);
 
 	while(!dev->terminated) {

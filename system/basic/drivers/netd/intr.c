@@ -58,7 +58,6 @@ int tid;
 
 int dflag [16];
 int dcnt = 0;
-int debug_flag = 0;
 
 void raise_softirq(uint32_t  sig){
     if(sig < SIGMAX){
@@ -69,12 +68,12 @@ void raise_softirq(uint32_t  sig){
 
 static void print_trace(void){
     int start = dcnt - 16;
-    klog("%d %d:", dcnt,   gSignel[SIGNET]);
+    slog("%d %d:", dcnt,   gSignel[SIGNET]);
     for(int i = 0; i < 16; i++){
-        klog("%d ", dflag[start%(sizeof(dflag)/sizeof(int))]);
+        slog("%d ", dflag[start%(sizeof(dflag)/sizeof(int))]);
         start++;
     }
-    klog("\n");
+    slog("\n");
 }
 
 void intr_loop(void) {
@@ -100,7 +99,7 @@ void intr_loop(void) {
         start_task();
         usleep(1000);
     }
-    return 0;
+    return;
 }
 
 void* debug_thread(void* p){

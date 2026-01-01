@@ -65,7 +65,7 @@ void release_task(net_task_t *task){
 int  task_cntl(net_task_t* task, int from_pid, int cmd, proto_t *in,  proto_t *out, void *p){
     if(task->state == NET_TASK_FINISH){
         if(cmd != task->cmd || from_pid != task->from_pid){
-            klog("ipc error\n");
+            slog("ipc error\n");
             return VFS_ERR_RETRY;
         }
         PF->copy(out, task->out.data, task->out.size);
@@ -92,7 +92,7 @@ int  task_read(net_task_t* task, int from_pid, char* buf,  int size, void *p){
     
     if(task->state == NET_TASK_FINISH){
         if(SOCK_RECV != task->cmd || from_pid != task->from_pid){
-            klog("ipc error\n");
+            slog("ipc error\n");
             return VFS_ERR_RETRY;
         }
         int len = proto_read_int(&task->out);
@@ -123,7 +123,7 @@ int  task_write(net_task_t* task, int from_pid,  char* buf,  int size, void *p){
     
     if(task->state == NET_TASK_FINISH){
         if(SOCK_SEND != task->cmd || from_pid != task->from_pid){
-            klog("ipc error\n");
+            slog("ipc error\n");
             return VFS_ERR_RETRY;
         }
         int ret = proto_read_int(&task->out);
@@ -259,6 +259,6 @@ static void* task_thread(void* arg){
     free(task->outbuf);
     free(task->iobuf);
     sock_close(task->sock);
-    klog("close task %08x\n", task,  task->sock);
+    slog("close task %08x\n", task,  task->sock);
     free(task);
 }

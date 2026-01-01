@@ -1,18 +1,19 @@
-include ../../../hardware/$(ARCH)/make.rule
+SYS_DIR=../../..
+include $(SYS_DIR)/platform/$(ARCH)/make.rule
 
-BUILD_DIR = ../../../build
+BUILD_DIR = $(SYS_DIR)/build/$(HW)
 TARGET_DIR = $(BUILD_DIR)
 
 LDFLAGS = -L$(TARGET_DIR)/lib
 
 CFLAGS += -Iinclude -I $(TARGET_DIR)/include
 
-LIB_SD_OBJS = src/sd.o
+LIB_SD_OBJS = src/partition.o src/sd.o
 
 SD = $(TARGET_DIR)/lib/libsd.a
 
 $(SD): $(LIB_SD_OBJS)
-	$(AR) rT $(SD) $(LIB_SD_OBJS)
+	$(AR) rcs $(SD) $(LIB_SD_OBJS)
 	cp -r include/* $(TARGET_DIR)/include
 
 

@@ -1,6 +1,7 @@
 #include <mstr.h>
-#include <string.h>
+#include <kstring.h>
 
+#include <stddef.h>
 #include <stdarg.h>
 #include <mm/kmalloc.h>
 
@@ -29,6 +30,7 @@ char* str_ncpy(str_t* str, const char* src, uint32_t l) {
 	if(len > l)
 		len = l;
 
+	len++;
 	uint32_t new_size = len;
 	if(str->max <= new_size) {
 		new_size = len + STR_BUF; /*STR BUF for buffer*/
@@ -36,6 +38,7 @@ char* str_ncpy(str_t* str, const char* src, uint32_t l) {
 		str->cstr = (char*)kmalloc(new_size);
 		str->max = new_size;
 	}
+	len--;
 
 	sstrncpy(str->cstr, src, len);
 	str->cstr[len] = 0;
@@ -63,7 +66,7 @@ char* str_add(str_t* str, const char* src) {
 	}
 
 	uint32_t len = (uint32_t)strlen(src);
-	uint32_t new_size = str->len + len;
+	uint32_t new_size = str->len + len + 1;
 	if(str->max <= new_size) {
 		new_size = str->len + len + STR_BUF; /*STR BUF for buffer*/
 		char* old = str->cstr;

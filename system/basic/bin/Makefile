@@ -4,6 +4,7 @@ all: builtin_apps
 builtin_apps:
 	cd cp;make
 	cd ipcserv;make
+	cd bgrun;make
 	cd test;make
 	cd tsaver;make
 	cd clear;make
@@ -30,15 +31,20 @@ builtin_apps:
 	cd mkdir;make
 	cd mkfifo;make
 	cd grep;make
+	cd head;make
+	cd more;make
 	cd rx;make
 	cd elfinfo;make
 	cd setux;make 
-	cd vi;make 
 	cd json;make 
+	cd sysinfo;make 
+	cd mmio;make
+	cd splash;make
 
 clean:
 	cd cp;make clean
 	cd ipcserv;make clean
+	cd bgrun;make clean
 	cd test;make clean
 	cd tsaver;make clean
 	cd clear;make clean
@@ -64,9 +70,13 @@ clean:
 	cd mkdir;make clean
 	cd mkfifo;make clean
 	cd grep;make clean
+	cd head;make clean
+	cd more;make clean
 	cd rx;make clean
 	cd elfinfo;make clean
 	cd whoami;make clean
 	cd setux;make clean
-	cd vi;make clean
 	cd json;make clean
+	cd sysinfo;make clean
+	cd mmio;make clean
+	cd splash;make clean

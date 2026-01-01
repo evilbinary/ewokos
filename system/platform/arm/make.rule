@@ -1,0 +1,43 @@
+AR = arm-none-eabi-ar
+CC = arm-none-eabi-gcc
+CXX = arm-none-eabi-c++
+LD = arm-none-eabi-ld
+OBJDUMP = arm-none-eabi-objdump
+
+CFLAGS = -marm \
+	-Wno-implicit-function-declaration \
+	-mfloat-abi=softfp \
+        -Wall -Wextra -fPIC -mapcs-frame \
+        -Wno-unused-parameter \
+		-Wno-int-conversion \
+        -fno-strict-aliasing \
+        -std=c99
+
+CXXFLAGS = -marm \
+	-Wno-implicit-function-declaration \
+	-mfloat-abi=softfp \
+        -Wall -Wextra -fPIC -mapcs-frame \
+        -Wno-unused-parameter \
+		-Wno-int-conversion \
+        -pedantic \
+	-fno-rtti \
+        -fno-exceptions \
+        -fno-strict-aliasing \
+        -fno-use-cxa-atexit \
+        -std=c++14
+
+ifeq ($(ARCH_VER),v7)
+CFLAGS += -mfpu=neon-vfpv3 -DBSP_BOOST -mfloat-abi=softfp
+CXXFLAGS += -mfpu=neon-vfpv3 -DBSP_BOOST -mfloat-abi=softfp
+endif
+       
+EWOK_LIBC = -lewoksys -lc -lgloss -lsoftfloat
+EWOK_LIB_GRAPH = -lfont -lfreetype -lgraph -lpng -lz -lopenlibm -ldisplay -lfb -lkeyb -lmouse  $(BSP_LFLAGS)
+EWOK_LIB_X = -lwidget++ -lx++ -lx -ltinyjson -lewokstl
+
+#CFLAGS +=  -g
+CFLAGS +=  -O2
+#CXXFLAGS +=  -g
+CXXFLAGS +=  -O2
+
+ARCH_CFLAGS = -marm  -mfloat-abi=softfp

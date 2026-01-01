@@ -3,11 +3,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ewoksys/syscall.h>
-#include <sysinfo.h>
+#include <ewoksys/sys.h>
 #include <string.h>
 
 static inline const char* svc_name(int32_t code) {
 	switch(code) {
+	case SYS_NONE:
+		return "none";
 	case SYS_EXIT:
 		return "exit";
 	case SYS_SIGNAL_SETUP:
@@ -54,8 +56,8 @@ static inline const char* svc_name(int32_t code) {
 		return "get_sys_info";
 	case SYS_GET_SYS_STATE:
 		return "get_sys_state";
-	case SYS_GET_KERNEL_TIC:
-		return "kernel_tic";
+	case SYS_GET_VSYSCALL_INFO:
+		return "get_vsyscall_info";
 	case SYS_GET_PROCS_NUM: 
 		return "get_procs_num";
 	case SYS_GET_PROCS: 
@@ -78,16 +80,12 @@ static inline const char* svc_name(int32_t code) {
 		return "ipc_setup";
 	case SYS_IPC_CALL:
 		return "ipc_call";
-	case SYS_IPC_GET_RETURN_SIZE:
-		return "ipc_get_return_size";
 	case SYS_IPC_GET_RETURN:
 		return "ipc_get_return";
 	case SYS_IPC_SET_RETURN:
 		return "ipc_set_return";
 	case SYS_IPC_END:
 		return "ipc_end";
-	case SYS_IPC_GET_ARG_SIZE:
-		return "ipc_get_arg_size";
 	case SYS_IPC_GET_ARG:
 		return "ipc_get_arg";
 	case SYS_IPC_PING:
@@ -122,20 +120,10 @@ static inline const char* svc_name(int32_t code) {
 		return "semaphore_quit";
 	case SYS_SOFT_INT:
 		return "soft_int";
-	case SYS_PROC_UUID:
-		return "proc_check_uuid";
 	case SYS_V2P:
 		return "sys_v2p";
 	case SYS_P2V:
 		return "sys_p2v";
-	case SYS_SCHD_CORE_LOCK:
-		return "sys_schd_core_lock";
-	case SYS_SCHD_CORE_UNLOCK:
-		return "sys_schd_core_unlock";
-	case SYS_CLOSE_KCONSOLE:
-		return "sys_root";
-	case SYS_SET_TIMER_INTR_USEC:
-		return "sys_set_timer_intr_usec";
 	}
 	return "unknown";
 }
@@ -145,7 +133,7 @@ int main(int argc, char* argv[]) {
 	(void)argv;
 	sys_state_t sys_state;
 
-	syscall1(SYS_GET_SYS_STATE, (int32_t)&sys_state);
+	syscall1(SYS_GET_SYS_STATE, (ewokos_addr_t)&sys_state);
 	printf("SVC  TIMES      %%  TYPE\n"
 				 "----------------------------------\n");
 	for(int i=0; i<SYS_CALL_NUM; i++) {

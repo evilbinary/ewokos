@@ -18,7 +18,7 @@
 
 static void* sd_read_ext2(const char* fname, int32_t* size) {
 	ext2_t ext2;
-	ext2_init(&ext2, sd_read, NULL);
+	ext2_init(&ext2, sd_read, NULL, 0);
 	void* ret = ext2_readfile(&ext2, fname, size);
 	ext2_quit(&ext2);
 	return ret;
@@ -33,7 +33,7 @@ static int32_t exec_from_sd(const char* prog) {
 
 	char* elf = sd_read_ext2(prog, &sz);
 	if(elf != NULL) {
-		int res = syscall3(SYS_EXEC_ELF, (int32_t)prog, (int32_t)elf, sz);
+		int res = syscall3(SYS_EXEC_ELF, (ewokos_addr_t)prog, (ewokos_addr_t)elf, (ewokos_addr_t)sz);
 		free(elf);
 		if(res == 0) {
 			return res;
@@ -43,7 +43,7 @@ static int32_t exec_from_sd(const char* prog) {
 }
 
 static void run_before_vfs(const char* cmd) {
-	klog("init: %s    ", cmd);
+	klog("init: %-16s   ", cmd);
 
 	int pid = fork();
 	if(pid == 0) {
@@ -57,10 +57,9 @@ static void run_before_vfs(const char* cmd) {
 	klog("[ok]\n");
 }
 
-static void run_init(const char* init_file) {
+static int run_init(const char* init_file) {
 	if(access(init_file, R_OK) != 0) {
-		klog("init: init file '%s' missed! \n", init_file);
-		return;
+		return -1;
 	}
 
 	int pid = fork();
@@ -68,38 +67,27 @@ static void run_init(const char* init_file) {
 		setuid(0);
 		setgid(0);
 		char cmd[FS_FULL_NAME_MAX];
-		snprintf(cmd, FS_FULL_NAME_MAX-1, "/bin/shell %s -initrd", init_file);
-		klog("\ninit: loading '%s' ... \n", init_file);
+		snprintf(cmd, FS_FULL_NAME_MAX-1, "/bin/shell %s", init_file);
+		//klog("\ninit: loading '%s' ... \n", init_file);
 		if(proc_exec(cmd) != 0) {
-			klog("[failed]!\n");
+			//klog("[failed]!\n");
 			exit(-1);
 		}
 	}
 	else 
 		waitpid(pid);
-}
-
-static int init_stdio(void) {
-	const char* tty_dev = "/dev/tty0";
-	klog("init: initailizing stdio at '%s' ... ", tty_dev);
-	int fd = open(tty_dev, O_RDWR);
-	if(fd > 0) {
-		dup2(fd, 0);
-		dup2(fd, 1);
-		dup2(fd, 2);
-		close(fd);
-		klog("[ok]\n");
-		setenv("CONSOLE_ID", tty_dev);
-		return 0;
-	}
-	klog("[failed]!\n");
-	return -1;
+	return 0;
 }
 
 static void switch_root(void) {
-	run_init("/etc/init0.rd");
-	if(init_stdio() != 0)
-		return;
+	char initfile[32];
+	uint8_t i = 0;
+	while(i < 8) {
+		snprintf(initfile, 31, "/etc/init%d.rd", i);
+		if(run_init(initfile) != 0)
+			break;
+		i++;
+	}
 	run_init("/etc/init.rd");
 }
 
@@ -128,7 +116,7 @@ int main(int argc, char** argv) {
 
 	switch_root();
 	while(true) {
-		proc_block_by(getpid(), (uint32_t)main);
+		proc_block_by(getpid(), (ewokos_addr_t)main);
 	}
 	return 0;
 }

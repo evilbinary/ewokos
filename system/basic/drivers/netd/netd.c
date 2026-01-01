@@ -7,6 +7,7 @@
 #include <ewoksys/vfs.h>
 #include <ewoksys/vdevice.h>
 #include <ewoksys/syscall.h>
+#include <tinyjson/tinyjson.h>
 #include <ewoksys/klog.h>
 #include <ewoksys/proto.h>
 #include <stdio.h>
@@ -21,6 +22,7 @@
 #include "stack/net.h"
 #include "stack/ip.h"
 #include "stack/loopback.h"
+#include "stack/ether_tap.h"
 
 static int network_fcntl(int fd, int from_pid, fsinfo_t* info,
 	int cmd, proto_t* in, proto_t* out, void* p) {
@@ -57,15 +59,13 @@ static int network_write(int fd, int from_pid, fsinfo_t* info,
     return ret > 0? ret : VFS_ERR_RETRY;
 }
 
-static int network_close(int fd, int from_pid, uint32_t node, bool delnode,void* p) {
+static int network_close(int fd, int from_pid, uint32_t node, fsinfo_t* fsinfo,void* p) {
 	(void)fd;
 	fsinfo_t* info = dev_get_file(fd, from_pid, node);
 
-	if(delnode){
-		net_task_t *task = (net_task_t *)info->data;
-		if(task)
-			release_task(task);
-	}
+	net_task_t *task = (net_task_t *)info->data;
+	if(task)
+		release_task(task);
 
 	return 0;
 }
@@ -87,45 +87,45 @@ static int setup(void)
     struct ip_iface *iface;
 
     if (net_init() == -1) {
-        klog("net_init() failure");
+        slog("net_init() failure");
         return -1;
     }
 
     dev = loopback_init();
     if (!dev) {
-        klog("loopback_init() failure");
+        slog("loopback_init() failure");
         return -1;
     }
 
     iface = ip_iface_alloc(LOOPBACK_IP_ADDR, LOOPBACK_NETMASK);
     if (!iface) {
-        klog("ip_iface_alloc() failure");
+        slog("ip_iface_alloc() failure");
         return -1;
     }
     if (ip_iface_register(dev, iface) == -1) {
-        klog("ip_iface_register() failure");
+        slog("ip_iface_register() failure");
         return -1;
     }
 
     dev = ether_tap_init(ETHER_TAP_NAME, NULL);
     if (!dev) {
-        klog("ether_tap_init() failure");
+        slog("ether_tap_init() failure");
         return -1;
     }
 
     iface = ip_iface_alloc(ETHER_TAP_IP_ADDR, ETHER_TAP_NETMASK);
     if (!iface) {
-        klog("ip_iface_alloc() failure");
+        slog("ip_iface_alloc() failure");
         return -1;
     }
 
     if (ip_iface_register(dev, iface) == -1) {
-        klog("ip_iface_register() failure");
+        slog("ip_iface_register() failure");
         return -1;
     }
 
 	if(dhcp_run(dev) == -1){
-        klog("dhcp_run() failure");
+        slog("dhcp_run() failure");
         return -1;
 	}
 
@@ -164,12 +164,11 @@ void mac2str(uint8_t *mac,  char* str){
 }
 
 char* network_devcmd(int from_pid, int argc, char** argv, void* p) {
-	char* buf = malloc(256);
-	buf[0] = 0;
+	json_var_t* json_var = json_var_new_obj(NULL, NULL);
 	if(strcmp(argv[0], "ip") == 0) {
 		struct ip_iface *iface =  NULL;
-		char* p = buf;
-		while(true){
+		json_node_t* node = json_var_add(json_var, "ips", json_var_new_array());
+		while(node != NULL && node->var != NULL){
 			iface = ip_iface_itor(iface);
 			if(iface == NULL)
 				break;
@@ -180,13 +179,16 @@ char* network_devcmd(int from_pid, int argc, char** argv, void* p) {
 			ip_addr_ntop(iface->netmask, netmask, sizeof(netmask));
 			ip_addr_ntop(iface->broadcast, broadcast, sizeof(broadcast));
 
-			snprintf(p + strlen(p), 256 - strlen(p), "IP Address: %s\n netmask: %s\n broadcast: %s\n", 
-					unicast,
-					netmask,
-					broadcast);
+			json_var_t* var_ip = json_var_new_obj(NULL, NULL);
+			json_var_add(var_ip, "ip", json_var_new_str(unicast));
+			json_var_add(var_ip, "netmask", json_var_new_str(netmask));
+			json_var_add(var_ip, "broadcast", json_var_new_str(broadcast));
+			json_var_array_add(node->var, var_ip);
 		}
 	}
-	return buf;
+	char* ret = json_var_to_cstr(json_var);
+	json_var_unref(json_var);
+	return ret;
 }
 
 int main(int argc, char** argv) {

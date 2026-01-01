@@ -16,12 +16,18 @@ void proto_init(proto_t* proto) {
 }
 
 void proto_copy(proto_t* proto, const void* data, uint32_t size) {
+	if(proto->total_size == 0 && proto->data == NULL) {
+		proto->data = proto->buffer;
+		proto->total_size = PROTO_BUFFER;
+	}
+
 	if(proto->total_size < size) {
 		if(proto->data != NULL && proto->data != proto->buffer) 
 			kfree(proto->data);
 		proto->data = kmalloc(size);
 		proto->total_size = size;
 	}
+
 	memcpy(proto->data, data, size);
 	proto->size = size;
 	proto->offset = 0;
@@ -31,7 +37,7 @@ void proto_copy(proto_t* proto, const void* data, uint32_t size) {
 void proto_clear(proto_t* proto) {
 	proto->size = 0;
 	proto->offset = 0;
-	if(proto->data != NULL && proto->data != proto->buffer)
+	if(!proto->pre_alloc && proto->data != NULL && proto->data != proto->buffer)
 		kfree(proto->data);
 	proto->data = proto->buffer;
 	proto->total_size = PROTO_BUFFER;

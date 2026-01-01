@@ -73,9 +73,9 @@ ether_dump(const uint8_t *frame, size_t flen)
     char addr[ETHER_ADDR_STR_LEN];
 
     hdr = (struct ether_hdr *)frame;
-    klog("        src: %s\n", ether_addr_ntop(hdr->src, addr, sizeof(addr)));
-    klog("        dst: %s\n", ether_addr_ntop(hdr->dst, addr, sizeof(addr)));
-    klog("       type: 0x%04x (%s)\n", ntoh16(hdr->type), ether_type_ntoa(hdr->type));
+    slog("        src: %s\n", ether_addr_ntop(hdr->src, addr, sizeof(addr)));
+    slog("        dst: %s\n", ether_addr_ntop(hdr->dst, addr, sizeof(addr)));
+    slog("       type: 0x%04x (%s)\n", ntoh16(hdr->type), ether_type_ntoa(hdr->type));
 #ifdef HEXDUMP
     hexdump(stderr, frame, flen);
 #endif
