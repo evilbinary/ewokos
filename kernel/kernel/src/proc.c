@@ -492,6 +492,9 @@ static void proc_terminate(context_t* ctx, proc_t* proc) {
 		/*free all ipc context*/
 		proc_ipc_clear(proc);
 		if(proc->space->interrupt.state != INTR_STATE_IDLE) {
+			if(proc->space->interrupt.interrupt != IRQ_SOFT) {
+				irq_enable(proc->space->interrupt.interrupt);
+			}
 			proc->space->interrupt.state = INTR_STATE_IDLE;
 			proc_wakeup(proc->info.pid, -1, (uint32_t)&proc->space->interrupt);
 		}
@@ -1026,9 +1029,8 @@ proc_t* kfork(context_t* ctx, int32_t type) {
 }
 
 int32_t get_procs_num(void) {
-	proc_t* cproc = get_current_proc();
 	int32_t res = 0;
-	int32_t i;
+	uint32_t i;
 	for(i=0; i<_kernel_config.max_task_num; i++) {
 		if(_task_table[i] != NULL && _task_table[i]->info.state != UNUSED)  {
 			if(!_task_table[i]->is_core_idle_proc)
@@ -1043,7 +1045,7 @@ int32_t get_procs(int32_t num, procinfo_t* procs) {
 		return -1;
 
 	int32_t j = 0;
-	int32_t i;
+	uint32_t i;
 	for(i=0; i<_kernel_config.max_task_num && j<(num); i++) {
 		proc_t* p = _task_table[i];
 		if(p != NULL && p->info.state != UNUSED && !p->is_core_idle_proc) {
@@ -1066,7 +1068,7 @@ int32_t get_proc(int32_t pid, procinfo_t *info) {
 }
 
 static int32_t renew_sleep_counter(uint32_t usec) {
-	int i;
+	uint32_t i;
 	int32_t res = -1;
 	for(i=0; i<_kernel_config.max_task_num; i++) {
 		proc_t* proc = _task_table[i];
@@ -1085,10 +1087,58 @@ static int32_t renew_sleep_counter(uint32_t usec) {
 	return res;
 }
 
-static int32_t renew_priority_counter(uint32_t usec) {
-	for(int i=0; i<_kernel_config.max_task_num; i++) {
+static int32_t renew_interrupt_counter(uint32_t usec) {
+	uint32_t i;
+	int32_t res = -1;
+	for(i=0; i<_kernel_config.max_task_num; i++) {
 		proc_t* proc = _task_table[i];
-		if(proc == NULL)
+		if(proc == NULL ||
+				proc->info.state == UNUSED || proc->info.state == ZOMBIE ||
+				proc->space->interrupt.state == INTR_STATE_IDLE)
+			continue;
+
+		proc->space->interrupt.counter += usec;
+		if(proc->space->interrupt.counter >= INTERRUPT_TIMEOUT_USEC) {
+			printf("interrupt timeout: %d\n", proc->space->interrupt.interrupt);
+			proc->space->interrupt.counter = 0;
+			proc->space->interrupt.state = INTR_STATE_IDLE;
+			if(proc->space->interrupt.interrupt != IRQ_SOFT)
+				irq_enable(proc->space->interrupt.interrupt);
+			memcpy(&proc->ctx, &proc->space->signal.saved_state.ctx, sizeof(context_t));
+		}
+	}
+	return res;
+}
+
+static int32_t renew_ipc_counter(uint32_t usec) {
+	uint32_t i;
+	int32_t res = -1;
+	for(i=0; i<_kernel_config.max_task_num; i++) {
+		proc_t* proc = _task_table[i];
+		if(proc == NULL ||
+				proc->info.state == UNUSED || proc->info.state == ZOMBIE)
+			continue;
+		ipc_task_t* ipc = &proc->space->ipc_server.ctask;
+		if(ipc->state == IPC_IDLE)
+			continue;
+
+		ipc->counter += usec;
+		if(ipc->counter >= IPC_TIMEOUT_USEC) {
+			printf("ipc timeout: %d\n", proc->info.pid);
+			memcpy(&proc->ctx, &proc->space->ipc_server.saved_state.ctx, sizeof(context_t));
+			if(proc->info.state == READY || proc->info.state == RUNNING)
+				proc_ready(proc);
+			proc_ipc_close(proc, ipc);
+			proc_wakeup(proc->info.pid, -1, (uint32_t)&proc->space->ipc_server); 
+		}
+	}
+	return res;
+}
+
+static int32_t renew_priority_counter(uint32_t usec) {
+	for(uint32_t i=0; i<_kernel_config.max_task_num; i++) {
+		proc_t* proc = _task_table[i];
+		if(proc == NULL || proc->info.state == UNUSED || proc->info.state == ZOMBIE)
 			continue;
 
 		if(proc->priority_count > 0)
@@ -1100,6 +1150,7 @@ static int32_t renew_priority_counter(uint32_t usec) {
 			proc_ready(proc);
 		}
 	}
+	return 0;
 }
 
 static void renew_vsyscall_info(void) {
@@ -1111,12 +1162,14 @@ static void renew_vsyscall_info(void) {
 inline int32_t renew_kernel_tic(uint32_t usec) {
 	renew_vsyscall_info();
 	renew_priority_counter(usec);
+	renew_interrupt_counter(usec);
+	renew_ipc_counter(usec);
 	return renew_sleep_counter(usec);	
 }
 
 static uint32_t _k_sec_counter = 0;
 inline void renew_kernel_sec(void) {
-	int i;
+	uint32_t i;
 	_k_sec_counter++;
 	for(i=0; i<_kernel_config.max_task_num; i++) {
 		proc_t* proc = _task_table[i];
